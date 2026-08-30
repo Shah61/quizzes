@@ -19,6 +19,7 @@ import {
   ANALYSIS_RATE, CLIP_MIN, CLIP_MAX, clampClipLength,
 } from '@/game/mimic-audio';
 import { pickBestWindow } from '@/game/mimic-dsp';
+import { masterGain } from '@/game/volume';
 import { clipId, deleteClip, listClips, saveClip, type ClipMeta } from '@/game/mimic-clips';
 import { refsFor, setCustomRefs, type MimicRef, type MimicSourceId, MIMIC_SOURCE_INFO } from '@/game/mimic-refs';
 import { sfx } from '@/game/sfx';
@@ -164,7 +165,7 @@ export default function ClipStudio({ onBack }: { onBack: () => void }) {
     const ctx = audioCtx();
     const src = ctx.createBufferSource();
     src.buffer = sliceBuffer(loaded.buffer, start, length);
-    src.connect(ctx.destination);
+    src.connect(masterGain(ctx));
     src.onended = () => { sourceRef.current = null; setPlaying(false); };
     src.start();
     sourceRef.current = src;
@@ -270,7 +271,7 @@ export default function ClipStudio({ onBack }: { onBack: () => void }) {
     const buffer = await ctx.decodeAudioData(await row.blob.arrayBuffer());
     const src = ctx.createBufferSource();
     src.buffer = buffer;
-    src.connect(ctx.destination);
+    src.connect(masterGain(ctx));
     src.onended = () => { sourceRef.current = null; setPlaying(false); };
     src.start();
     sourceRef.current = src;

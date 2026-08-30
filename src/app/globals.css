@@ -775,6 +775,54 @@ img { display: block; max-width: 100%; }
 }
 .exit-btn:hover { color: var(--text); border-color: var(--line-2); background: rgba(24, 24, 40, 0.95); }
 
+/* ------------------------------------------------------------- volume */
+
+.volume { position: fixed; top: 10px; right: 10px; z-index: 41; }
+/* The arena keeps its exit button in this corner, so step aside for it. */
+.volume[data-shifted='true'] { right: 52px; }
+
+.volume-btn {
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(10, 10, 20, 0.8);
+  backdrop-filter: blur(8px);
+  color: var(--muted);
+  font-size: 0.95rem; line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.volume-btn:hover { color: var(--text); border-color: var(--line-2); background: rgba(24, 24, 40, 0.95); }
+
+.volume-panel {
+  position: absolute;
+  top: 42px; right: 0;
+  width: 250px;
+  padding: 16px;
+  border-radius: var(--r);
+  border: 1px solid var(--line-2);
+  background: rgba(13, 13, 26, 0.97);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
+  animation: volume-in 0.14s ease;
+}
+@keyframes volume-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.volume-panel input[type='range'] { width: 100%; margin-top: 8px; }
+.volume-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.volume-value { font-size: 0.8em; color: var(--muted); }
+.volume-hint { font-size: 0.74em; margin-top: 8px; line-height: 1.45; }
+.volume-mute { width: 100%; margin-top: 14px; }
+
+/* On a phone the panel would otherwise run off the right edge. */
+@media (max-width: 420px) {
+  .volume-panel { width: min(78vw, 250px); }
+}
+
 @media (max-width: 860px) {
   .scoreboard { padding-right: 40px; }
 }

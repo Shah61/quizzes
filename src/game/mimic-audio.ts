@@ -9,6 +9,7 @@ import type { SoundRecipe } from './mimic-sounds';
 import { recipeDuration } from './mimic-sounds';
 import { pickBestWindow } from './mimic-dsp';
 import { getClip } from './mimic-clips';
+import { masterGain } from './volume';
 import type { MimicRef } from './mimic-refs';
 
 export const ANALYSIS_RATE = 16000;
@@ -286,7 +287,7 @@ export function playTake(buffer: AudioBuffer, sabotage: Sabotage): Promise<void>
   const now = ctx.currentTime + 0.05;
 
   if (sabotage === 'fart') {
-    playRaspberry(ctx, ctx.destination, now);
+    playRaspberry(ctx, masterGain(ctx), now);
     return new Promise((r) => setTimeout(r, 950));
   }
 
@@ -332,10 +333,10 @@ export function playTake(buffer: AudioBuffer, sabotage: Sabotage): Promise<void>
     wet.gain.value = 0.75;
     node.connect(delay);
     delay.connect(feedback).connect(delay);
-    delay.connect(wet).connect(ctx.destination);
+    delay.connect(wet).connect(masterGain(ctx));
   }
 
-  master.connect(ctx.destination);
+  master.connect(masterGain(ctx));
   src.start(now);
 
   const tail = sabotage === 'echo' ? 1.4 : 0.1;
@@ -350,7 +351,7 @@ export function playBuffer(buffer: AudioBuffer): Promise<void> {
   const ctx = audioCtx();
   const src = ctx.createBufferSource();
   src.buffer = buffer;
-  src.connect(ctx.destination);
+  src.connect(masterGain(ctx));
   src.start();
   return new Promise((resolve) => { src.onended = () => resolve(); });
 }

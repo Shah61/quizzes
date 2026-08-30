@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { bindMediaElement } from '@/game/volume';
 
 /* ------------------------------------------------------------------ timer */
 
@@ -165,6 +166,13 @@ export function OpeningPlayer({
   const [failed, setFailed] = useState(false);
 
   useEffect(() => { setFailed(false); setProgress(0); }, [src]);
+
+  // The theme streams through a media element rather than the audio graph, so
+  // it takes its level from the volume control directly.
+  useEffect(() => {
+    const el = ref.current;
+    return el ? bindMediaElement(el) : undefined;
+  }, []);
 
   useEffect(() => {
     const el = ref.current;

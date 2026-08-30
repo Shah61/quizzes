@@ -1,7 +1,12 @@
 /**
  * Sound effects are synthesised with the Web Audio API rather than shipped as
  * files: no assets to load, no licensing, and they stay crisp at any volume.
+ *
+ * Output goes to the effects channel in volume.ts rather than straight to the
+ * speakers, so these sit under both the master level and their own.
  */
+
+import { effectsGain } from './volume';
 
 let ctx: AudioContext | null = null;
 let enabled = true;
@@ -48,7 +53,7 @@ function tone({ freq, to, dur = 0.16, type = 'sine', gain = 0.22, delay = 0 }: T
   amp.gain.exponentialRampToValueAtTime(gain, t0 + 0.012);
   amp.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
 
-  osc.connect(amp).connect(ac.destination);
+  osc.connect(amp).connect(effectsGain(ac));
   osc.start(t0);
   osc.stop(t0 + dur + 0.03);
 }
@@ -64,7 +69,7 @@ function noise(dur = 0.2, gain = 0.14) {
   const amp = ac.createGain();
   amp.gain.value = gain;
   src.buffer = buf;
-  src.connect(amp).connect(ac.destination);
+  src.connect(amp).connect(effectsGain(ac));
   src.start();
 }
 

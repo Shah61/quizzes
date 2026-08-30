@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Question, TeamId } from '@/game/types';
 import { canRecord, NO_MIC, useRecorder, type Take } from '@/game/recorder';
 import { sfx } from '@/game/sfx';
+import { bindMediaElement } from '@/game/volume';
 
 const MAX_SECONDS = 20;
 
@@ -60,9 +61,11 @@ export default function VoiceRound({
     audioRef.current?.pause();
     const el = new Audio(take.url);
     audioRef.current = el;
+    // Takes are played back through the same volume control as everything else.
+    const release = bindMediaElement(el);
     setPlaying(team);
-    el.onended = () => setPlaying(null);
-    void el.play().catch(() => setPlaying(null));
+    el.onended = () => { release(); setPlaying(null); };
+    void el.play().catch(() => { release(); setPlaying(null); });
   };
 
   const bothRecorded = Boolean(takes.a && takes.b);
