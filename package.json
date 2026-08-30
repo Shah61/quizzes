@@ -1,0 +1,26 @@
+{
+  "name": "quiz-arena",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "content": "node scripts/build-content.mjs",
+    "content:scenes": "node scripts/build-scenes.mjs",
+    "content:opening-audio": "node scripts/build-opening-audio.mjs",
+    "test": "node scripts/test-mimic-dsp.mjs"
+  },
+  "dependencies": {
+    "next": "15.5.4",
+    "peerjs": "^1.5.5",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "@types/react": "19.1.1",
+    "@types/react-dom": "19.1.1",
+    "typescript": "5.7.3"
+  }
+}
