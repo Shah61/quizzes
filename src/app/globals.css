@@ -471,6 +471,8 @@ img { display: block; max-width: 100%; }
 
 /* --- audio player ---------------------------------------------- */
 
+.audio-queue { font-size: 0.78em; margin-top: 8px; text-align: center; }
+
 .audio-stage {
   width: min(92vw, 620px);
   padding: 30px;

@@ -160,8 +160,20 @@ The build works in three passes:
 The player offers both, smallest first, and the browser plays the first source
 it understands — the audio-only files are Ogg Vorbis, which Safari will not
 play, so listing both means most browsers get the small file and Safari still
-gets a round. While a track is playing, the next one is already downloading in
-its own element, so only the first track of a round has any wait at all.
+gets a round.
+
+**Tracks load ahead of the round, not one at a time.** Once the first track is
+playing, the player keeps pulling down the ones after it and holds up to twelve
+ready — so a round of 3, 5 or 10 is fully loaded before the first song ends, and
+a 50 or 100 track marathon simply stays a dozen ahead for the whole game. Only
+the very first track of a round waits for anything. The screen shows how many
+are ready underneath the equaliser.
+
+They are fed in a few at a time rather than all at once, which sounds like the
+slower option and is not: start thirteen downloads together and the browser
+spreads the connection evenly across all of them, so the track you need next is
+no further along than the one twelve questions away. Three at a time finishes
+them in the order they are needed. Twelve ready costs about 20MB of buffer.
 
 > These files are served `no-cache`, so the browser will not reuse a downloaded
 > track between elements — which is why the next track is warmed in the element

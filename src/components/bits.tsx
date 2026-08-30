@@ -159,14 +159,39 @@ export function RevealImage({
  * not play — listing both means most browsers get the small file and Safari
  * still gets a round.
  */
+/**
+ * How many upcoming tracks are kept warm at once.
+ *
+ * A warmed element holds most of its track in memory — roughly 3MB — so this is
+ * a memory budget as much as anything: twelve is about 35MB, which is nothing,
+ * where a hundred would be nearer 300MB and the browser would start evicting
+ * the buffers anyway. It is also past the point of diminishing returns, since a
+ * track is on screen for about 25 seconds: twelve ahead is five minutes of
+ * runway, and the queue refills as the round moves.
+ *
+ * Rounds of 3, 5 or 10 therefore finish loading in their entirety during the
+ * first track.
+ */
+export const PRELOAD_AHEAD = 12;
+
+/**
+ * How many upcoming tracks may be downloading at once.
+ *
+ * Mounting the whole queue immediately is the obvious version and it is worse:
+ * the browser round-robins across every connection, so thirteen tracks all
+ * crawl along together and the one actually needed next is no further ahead
+ * than the one twelve questions away. Feeding them in a few at a time finishes
+ * them in order, which is the order they are needed in.
+ */
+const PRELOAD_PARALLEL = 3;
+
 export function OpeningPlayer({
-  src, fallback, nextSrc, nextFallback, playing, onEnded, startAt = 0,
+  src, fallback, upcoming = [], playing, onEnded, startAt = 0,
 }: {
   src: string;
   fallback?: string;
-  /** The track after this one, warmed in the background while this one plays. */
-  nextSrc?: string;
-  nextFallback?: string;
+  /** The tracks after this one, warmed in the background while this one plays. */
+  upcoming?: { src: string; fallback?: string }[];
   playing: boolean;
   onEnded?: () => void;
   startAt?: number;
@@ -175,8 +200,33 @@ export function OpeningPlayer({
   const [progress, setProgress] = useState(0);
   const [failed, setFailed] = useState(false);
   const [ready, setReady] = useState(false);
+  const [warm, setWarm] = useState(0);
+  // Latches on the first track that becomes playable and never resets. `ready`
+  // goes false on every track change, and gating the queue on that alone tore
+  // all twelve elements down and rebuilt them once per question — throwing away
+  // exactly the buffering the queue exists to accumulate.
+  const [queueStarted, setQueueStarted] = useState(false);
 
   useEffect(() => { setFailed(false); setProgress(0); setReady(false); }, [src]);
+
+  // Count how many of the *upcoming* elements could play through right now. It
+  // drives both the queue's width and the line telling the host how many are
+  // ready, and there is no event for "some other element finished buffering".
+  useEffect(() => {
+    const id = setInterval(() => {
+      let n = 0;
+      for (const [url, el] of els.current) if (url !== src && el.readyState >= 4) n++;
+      setWarm(n);
+    }, 900);
+    return () => clearInterval(id);
+  }, [src]);
+
+  // Widen the queue as tracks land, and never narrow it — a track that is
+  // part-downloaded should not be dropped because the count moved underneath it.
+  const [slots, setSlots] = useState(PRELOAD_PARALLEL);
+  useEffect(() => {
+    setSlots((s) => Math.max(s, Math.min(PRELOAD_AHEAD, warm + PRELOAD_PARALLEL)));
+  }, [warm]);
 
   // The theme streams through a media element rather than the audio graph, so
   // it takes its level from the volume control directly.
@@ -208,10 +258,17 @@ export function OpeningPlayer({
   const tracks: { url: string; alt?: string; current: boolean }[] = [
     { url: src, alt: fallback, current: true },
   ];
-  // Only once this track is comfortable — a second download competing with the
-  // one the room is waiting on would make the problem worse, not better.
-  if (nextSrc && nextSrc !== src && ready) {
-    tracks.push({ url: nextSrc, alt: nextFallback, current: false });
+  // The rest of the queue only mounts once this track is comfortable. Starting
+  // a dozen downloads alongside the one the room is waiting on would make the
+  // wait worse, which is the whole thing we are trying to fix; a few seconds
+  // later there is bandwidth to spare and they cost nothing.
+  if (ready || queueStarted) {
+    const seen = new Set([src]);
+    for (const t of upcoming.slice(0, slots)) {
+      if (!t.src || seen.has(t.src)) continue;
+      seen.add(t.src);
+      tracks.push({ url: t.src, alt: t.fallback, current: false });
+    }
   }
 
   return (
@@ -227,7 +284,7 @@ export function OpeningPlayer({
           preload="auto"
           muted={!t.current}
           style={{ display: 'none' }}
-          onCanPlayThrough={t.current ? () => setReady(true) : undefined}
+          onCanPlayThrough={t.current ? () => { setReady(true); setQueueStarted(true); } : undefined}
           onTimeUpdate={t.current ? (e) => {
             const el = e.currentTarget;
             if (el.duration) setProgress(el.currentTime / el.duration);
@@ -245,6 +302,9 @@ export function OpeningPlayer({
         ))}
       </div>
       <div className="audio-progress"><i style={{ width: `${progress * 100}%` }} /></div>
+      {warm > 0 && (
+        <p className="dim audio-queue">{warm} more track{warm === 1 ? '' : 's'} ready to go</p>
+      )}
       <p className="muted" style={{ marginTop: 14, fontSize: '0.88em' }}>
         {failed
           ? 'This track would not load — skip to the next one.'

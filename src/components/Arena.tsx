@@ -8,7 +8,7 @@ import {
 } from '@/game/engine';
 import { sfx } from '@/game/sfx';
 import {
-  BuzzBanner, Confetti, OpeningPlayer, RevealImage, ScoreNumber, TimerBar, TimerRing, Toast, Verdict,
+  BuzzBanner, Confetti, OpeningPlayer, PRELOAD_AHEAD, RevealImage, ScoreNumber, TimerBar, TimerRing, Toast, Verdict,
 } from './bits';
 import OnlineRoom from './OnlineRoom';
 import VoiceRound from './VoiceRound';
@@ -32,6 +32,17 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
   const round = currentRound(state);
   const q = currentQuestion(state);
   const teamOf = (id: TeamId) => config.teams.find((t) => t.id === id)!;
+
+  // The rest of the round's tracks, so the player can pull them ahead of time
+  // instead of making the room wait once per song. Memoised on the index so the
+  // queue is a stable array and mounted elements are not torn down each render.
+  const upcomingTracks = useMemo(
+    () => (round?.questions ?? [])
+      .slice(state.qIndex + 1, state.qIndex + 1 + PRELOAD_AHEAD)
+      .filter((n) => n.audio)
+      .map((n) => ({ src: n.audio as string, fallback: n.audioFallback })),
+    [round, state.qIndex],
+  );
 
   /* ------------------------------------------------------------- clock */
 
@@ -254,20 +265,26 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
   // once the answer is out. Untimed rounds play as soon as the question is up.
   const audioPlaying = state.phase === 'question' && (round?.seconds ? state.running : true);
 
+  // The cover art replaces the player on screen once the answer is out, but the
+  // player itself stays mounted and merely hidden. Swapping the two as siblings
+  // in a ternary unmounted it every reveal, and with it the whole preload queue
+  // — which is worth nothing if it is thrown away once a question.
+  const coverShowing = state.phase === 'revealed' && Boolean(q?.image);
+
   const questionMedia = !q ? null
     : q.audio ? (
-      state.phase === 'revealed' && q.image ? (
-        <RevealImage src={q.image} progress={1} mode="none" frame="portrait" />
-      ) : (
-        <OpeningPlayer
-          src={q.audio}
-          fallback={q.audioFallback}
-          nextSrc={round?.questions[state.qIndex + 1]?.audio}
-          nextFallback={round?.questions[state.qIndex + 1]?.audioFallback}
-          playing={audioPlaying}
-          onEnded={() => dispatch({ type: 'reveal' })}
-        />
-      )
+      <>
+        {coverShowing && <RevealImage src={q.image!} progress={1} mode="none" frame="portrait" />}
+        <div style={coverShowing ? { display: 'none' } : undefined}>
+          <OpeningPlayer
+            src={q.audio}
+            fallback={q.audioFallback}
+            upcoming={upcomingTracks}
+            playing={audioPlaying}
+            onEnded={() => dispatch({ type: 'reveal' })}
+          />
+        </div>
+      </>
     ) : q.image ? (
       <RevealImage
         src={q.image}
