@@ -40,6 +40,8 @@ export interface Question {
   meta?: string;
   image?: string;
   audio?: string;
+  /** Second source for the audio, tried when the browser cannot play the first. */
+  audioFallback?: string;
   /** Sprites need pixelated upscaling rather than smooth cover-fit. */
   sprite?: boolean;
   /** Voice Battle only: who to perform and how to play it. */

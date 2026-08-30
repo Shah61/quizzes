@@ -31,21 +31,58 @@ async function exists(url) {
   }
 }
 
+/**
+ * The filename swap is a guess. When it misses, ask AnimeThemes directly —
+ * the video record carries the real audio link, which is not always the
+ * basename with a different extension.
+ */
+async function audioFromApi(videoUrl) {
+  const basename = videoUrl.split('/').pop();
+  const url = `https://api.animethemes.moe/video?filter%5Bbasename%5D=${encodeURIComponent(basename)}&include=audio`;
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const link = json?.videos?.[0]?.audio?.link;
+    const size = json?.videos?.[0]?.audio?.size;
+    return link ? { link, size: Number(size) || 0 } : null;
+  } catch {
+    return null;
+  }
+}
+
 const rows = JSON.parse(await readFile(PACK, 'utf8'));
 console.log(`[opening-audio] probing ${rows.length} themes...`);
 
 let found = 0;
+let recovered = 0;
 let done = 0;
 await pool(rows, 8, async (row) => {
   const ogg = row.audio
     .replace('://v.animethemes.moe/', '://a.animethemes.moe/')
     .replace(/\.webm$/, '.ogg');
-  const size = await exists(ogg);
-  if (size) { row.aud = ogg; row.audBytes = size; found++; }
-  else delete row.aud;
+  let size = await exists(ogg);
+  let link = ogg;
+
+  // Missed on the guess — ask the API what the audio file is actually called.
+  if (!size) {
+    const viaApi = await audioFromApi(row.audio);
+    if (viaApi && viaApi.link !== ogg) {
+      const confirmed = await exists(viaApi.link);
+      if (confirmed) { link = viaApi.link; size = confirmed; recovered++; }
+    } else if (viaApi) {
+      // Same URL we already tried; nothing more to do.
+    }
+  }
+
+  if (size) { row.aud = link; row.audBytes = size; found++; }
+  else { delete row.aud; delete row.audBytes; }
   if (++done % 40 === 0) console.log(`   ${done}/${rows.length} — ${found} with audio`);
   await sleep(60);
 });
 
 await writeFile(PACK, JSON.stringify(rows, null, 0));
-console.log(`-> anime-openings.json  (${found}/${rows.length} themes have an audio-only file)`);
+console.log(`-> anime-openings.json  (${found}/${rows.length} themes have an audio-only file, ${recovered} found via the API)`);

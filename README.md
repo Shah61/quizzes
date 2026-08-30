@@ -144,12 +144,28 @@ copied into this project — the build script asks their API which themes each
 anime has and stores the resulting URLs, so the audio streams from their servers
 at play time.
 
-The build works in two passes:
+The build works in three passes:
 
 1. Pull the ~300 most popular anime from **AniList** (which also supplies the
    character art and cover images).
 2. Look each one up on AnimeThemes and keep every OP/ED that has a playable
    file, capped at three per series so one long-running show cannot dominate.
+3. Find the **audio-only** file for each theme. AnimeThemes publishes the themes
+   as video, and those are enormous — 45MB on average, up to 62MB — while the
+   same theme as audio is around 3MB. The rounds only ever play the sound, so
+   streaming the video was costing roughly **fourteen times** the bytes for
+   nothing, which on a slow connection meant a ten-second wait before a track
+   started. 275 of the 357 themes have one; the rest keep the video.
+
+The player offers both, smallest first, and the browser plays the first source
+it understands — the audio-only files are Ogg Vorbis, which Safari will not
+play, so listing both means most browsers get the small file and Safari still
+gets a round. While a track is playing, the next one is already downloading in
+its own element, so only the first track of a round has any wait at all.
+
+> These files are served `no-cache`, so the browser will not reuse a downloaded
+> track between elements — which is why the next track is warmed in the element
+> that will actually play it, rather than being fetched and thrown away.
 
 Each track is tagged `OP` or `ED`, which is what keeps the two rounds separate —
 the openings round draws only from `OP`, the endings round only from `ED`.

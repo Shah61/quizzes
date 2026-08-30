@@ -149,33 +149,44 @@ export function RevealImage({
 /* -------------------------------------------------------------- audio */
 
 /**
- * Plays an anime opening. The source is a .webm video served by AnimeThemes;
- * we mount it as a hidden <video> so the audio track plays everywhere, and show
- * an equaliser instead of the picture (which would give the answer away).
+ * Plays an anime opening. Mounted as a hidden <video> so it can take either an
+ * audio-only file or the source video, with an equaliser shown instead of the
+ * picture (which would give the answer away).
+ *
+ * Two sources are offered, smallest first, and the browser plays the first one
+ * it understands. That matters more than it sounds: the audio-only file is
+ * around a ninth the size of the video, but it is Ogg Vorbis, which Safari will
+ * not play — listing both means most browsers get the small file and Safari
+ * still gets a round.
  */
 export function OpeningPlayer({
-  src, playing, onEnded, startAt = 0,
+  src, fallback, nextSrc, nextFallback, playing, onEnded, startAt = 0,
 }: {
   src: string;
+  fallback?: string;
+  /** The track after this one, warmed in the background while this one plays. */
+  nextSrc?: string;
+  nextFallback?: string;
   playing: boolean;
   onEnded?: () => void;
   startAt?: number;
 }) {
-  const ref = useRef<HTMLVideoElement>(null);
+  const els = useRef(new Map<string, HTMLVideoElement>());
   const [progress, setProgress] = useState(0);
   const [failed, setFailed] = useState(false);
+  const [ready, setReady] = useState(false);
 
-  useEffect(() => { setFailed(false); setProgress(0); }, [src]);
+  useEffect(() => { setFailed(false); setProgress(0); setReady(false); }, [src]);
 
   // The theme streams through a media element rather than the audio graph, so
   // it takes its level from the volume control directly.
   useEffect(() => {
-    const el = ref.current;
+    const el = els.current.get(src);
     return el ? bindMediaElement(el) : undefined;
-  }, []);
+  }, [src]);
 
   useEffect(() => {
-    const el = ref.current;
+    const el = els.current.get(src);
     if (!el) return;
     if (playing) {
       // Openings often have a quiet intro; skipping in lands on the hook.
@@ -186,21 +197,48 @@ export function OpeningPlayer({
     }
   }, [playing, startAt, src]);
 
+  // Each track gets its own element, keyed by URL. React keeps an element alive
+  // for as long as its key stays in this list, so the one that spent the last
+  // question downloading is the very same one that plays next — which is the
+  // only prefetch that works here, because AnimeThemes serves these `no-cache`
+  // and the browser will not reuse a downloaded body across elements.
+  //
+  // Keying by URL is also what makes it safe: an element can only ever hold the
+  // track it was created for, so no amount of skipping can play the wrong song.
+  const tracks: { url: string; alt?: string; current: boolean }[] = [
+    { url: src, alt: fallback, current: true },
+  ];
+  // Only once this track is comfortable — a second download competing with the
+  // one the room is waiting on would make the problem worse, not better.
+  if (nextSrc && nextSrc !== src && ready) {
+    tracks.push({ url: nextSrc, alt: nextFallback, current: false });
+  }
+
   return (
     <div className="audio-stage">
-      <video
-        ref={ref}
-        src={src}
-        playsInline
-        preload="auto"
-        style={{ display: 'none' }}
-        onTimeUpdate={(e) => {
-          const el = e.currentTarget;
-          if (el.duration) setProgress(el.currentTime / el.duration);
-        }}
-        onEnded={onEnded}
-        onError={() => setFailed(true)}
-      />
+      {tracks.map((t) => (
+        <video
+          key={t.url}
+          ref={(el) => {
+            if (el) els.current.set(t.url, el);
+            else els.current.delete(t.url);
+          }}
+          playsInline
+          preload="auto"
+          muted={!t.current}
+          style={{ display: 'none' }}
+          onCanPlayThrough={t.current ? () => setReady(true) : undefined}
+          onTimeUpdate={t.current ? (e) => {
+            const el = e.currentTarget;
+            if (el.duration) setProgress(el.currentTime / el.duration);
+          } : undefined}
+          onEnded={t.current ? onEnded : undefined}
+          onError={t.current ? () => setFailed(true) : undefined}
+        >
+          <source src={t.url} type={t.url.endsWith('.ogg') ? 'audio/ogg' : 'video/webm'} />
+          {t.alt && <source src={t.alt} type="video/webm" />}
+        </video>
+      ))}
       <div className="viz" data-playing={playing && !failed}>
         {Array.from({ length: 26 }, (_, i) => (
           <span key={i} style={{ animationDelay: `${(i % 9) * 0.11}s` }} />

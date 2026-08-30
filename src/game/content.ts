@@ -94,7 +94,7 @@ function textQuestions(category: Category): Question[] {
 
 type CharRow = { id: string; name: string; alt: string[]; from: string; img: string; tier: number };
 type TitleRow = { id: string; name: string; alt: string[]; year: number | null; img: string; tier: number };
-type OpRow = { id: string; anime: string; animeAlt: string[]; slug: string; type: string; song: string; year: number | null; cover: string; audio: string; tier: number };
+type OpRow = { id: string; anime: string; animeAlt: string[]; slug: string; type: string; song: string; year: number | null; cover: string; audio: string; aud?: string; tier: number };
 type ItemRow = { id: string; name: string; kind: string; img: string; tier: number };
 type PlaceRow = { id: string; name: string; state: string; img: string; tier: number };
 
@@ -149,7 +149,17 @@ function openingQuestions(kind: 'OP' | 'ED'): Question[] {
     choices: buildChoices(o.anime, names),
     hint: o.year ? `It aired in ${o.year}.` : undefined,
     meta: `${o.anime} · ${o.slug} · "${o.song}"`,
-    audio: o.audio,
+    // The audio-only file where AnimeThemes has one. `audio` is the source
+    // *video* — 32MB for Naruto OP8 against 3.5MB for the same theme's .ogg —
+    // and the round only ever plays the sound, so streaming the video was
+    // costing about nine times the bytes for nothing.
+    //
+    // The video stays on as a second source rather than being dropped: the
+    // audio-only files are Ogg Vorbis, which Safari does not play, and 82 of
+    // the themes have no audio-only file at all. The browser takes the first
+    // source it can handle, so nobody ends up worse off than before.
+    audio: o.aud ?? o.audio,
+    audioFallback: o.aud ? o.audio : undefined,
     image: o.cover,
     difficulty: Math.min(3, o.tier) as 1 | 2 | 3,
   }));

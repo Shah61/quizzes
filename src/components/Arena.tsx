@@ -261,6 +261,9 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
       ) : (
         <OpeningPlayer
           src={q.audio}
+          fallback={q.audioFallback}
+          nextSrc={round?.questions[state.qIndex + 1]?.audio}
+          nextFallback={round?.questions[state.qIndex + 1]?.audioFallback}
           playing={audioPlaying}
           onEnded={() => dispatch({ type: 'reveal' })}
         />
