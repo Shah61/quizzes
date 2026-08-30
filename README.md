@@ -79,10 +79,25 @@ on a touchscreen.
 | `H` | Show the hint |
 | `Space` | Show the answer, then move to the next question |
 | `Enter` | Start the round |
+| `M` | Mute / unmute everything |
+| `[` / `]` | Volume down / up |
 
 There are on-screen buttons for all of it, plus **+5 / −5** next to each team so
 you can award or dock points for anything you like, and **Skip round** if a round
 is not landing.
+
+### Volume
+
+The speaker button in the top corner is on every screen, including mid-round.
+It has two sliders: one for everything, and one for just the beeps and buzzers —
+so you can keep the anime openings loud without the countdown ticks cutting
+through the room. Both are saved in the browser, so the level survives a reload.
+
+It covers every sound the game makes: interface effects, the openings and
+endings, Mimic references, and voice takes on playback. The one thing it does
+not touch is the reference render the Mimic scorer grades against, which is
+computed offline and never played — putting the volume slider in front of that
+would make how loud your laptop is part of the scoring.
 
 ### Game length
 

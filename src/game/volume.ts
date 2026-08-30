@@ -30,15 +30,14 @@ const DEFAULTS: VolumeState = { master: 0.8, effects: 0.7, muted: false };
 interface Bus { master: GainNode; effects: GainNode }
 
 /**
- * The store lives on a global rather than in module scope.
+ * The store hangs off a registered symbol rather than living in module scope.
  *
- * This module is imported both by the game modules and by the React tree, and
- * a bundler splitting those into different chunks — or a dev-server hot reload
- * re-evaluating the file — gives you two copies of it. That failure is silent
- * and confusing: the slider updates its own copy's state and writes it to
- * storage, while the copy holding the actual gain nodes never hears about it,
- * so the setting looks like it saved and nothing gets quieter. Keying off a
- * registered symbol means every copy shares one store.
+ * Module scope is only a singleton if the module is evaluated once, and this
+ * one is imported from both the game modules and the React tree — a chunk split
+ * or a dev-server hot reload can evaluate it twice. Two copies fail silently in
+ * an unpleasant way: the slider updates its own copy and writes to storage
+ * while the copy holding the gain nodes hears nothing, so the setting appears
+ * to save and nothing gets quieter. Cheap to rule out, so it is ruled out.
  */
 interface Store {
   state: VolumeState;
