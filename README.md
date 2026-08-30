@@ -113,8 +113,39 @@ screen scores it and moves on by itself, and nobody has to adjudicate. Online,
 each player just taps their answer; on one screen, **Team A uses keys `1`–`4` and
 Team B uses `7`–`0`**. Whoever locks the right answer first gets a speed bonus.
 
+**Every round works without a host**, not just the multiple-choice ones. Buzzer
+Battle becomes a race to lock the right option. Rapid Fire gives the team on the
+clock four options a question and keeps count. The Chain runs its own ladder,
+with **Bank** and **Risk it** on screen where the host's controls used to be.
+The Final Wager settles each team's bet against their answer. Voice Battle is
+decided by the room's vote, and Mimic is scored by the machine either way.
+
 One browser still has to run the game even in this mode — whoever opens the room
 can play along like everyone else.
+
+### Nobody can copy your answer
+
+On a lock-in question the screen shows only *that* a team has answered — "Team
+Red locked in. Waiting…" — never which option they took, and no highlight
+appears on the grid until both are in. It used to put a chip with the team's
+name on the option they had chosen the moment they locked it, which the other
+side could simply read off the screen. Online the same holds: the other team's
+pick is not in the data your device receives until the answer is out.
+
+## 🎯 Solo Run
+
+A third option on the main menu: **one player against the questions**, no host
+and no second team. Nine of the ten rounds work alone — buzzer, pixel reveal,
+openings, endings, Mimic, rapid fire, the chain, lock it in and a final wager.
+
+Voice Battle is the exception. It is two teams performing the same character
+with the room voting between them, so there is nothing left of it with one
+player; it is switched off in solo setup rather than pretending otherwise.
+Mimic *does* work alone, because that one is scored by the machine on melody and
+rhythm rather than by a vote.
+
+The chain never changes hands, rapid fire is a single turn on the clock, and the
+end screen gives you your score rather than declaring a winner.
 
 ## The rounds
 
@@ -130,6 +161,10 @@ can play along like everyone else.
 | ⛓️ **The Chain** | Every correct answer doubles the pot — 5, 10, 20, 40, 80… Bank it, or lose the lot on one wrong answer. |
 | 🎯 **Lock It In** | Four options, both teams lock an answer, the screen scores it. |
 | 💰 **Final Wager** | Both teams bet points *before* seeing the question. Win the bet or lose it. |
+
+Every one of these runs with a host, without a host, or solo — Voice Battle
+being the only one that needs two teams.
+
 
 Topics: **Anime · Minecraft · Terraria · Marvel · General Knowledge · Hit Songs
 (English, Japanese and Malay) · Malaysia**. Turn any of them on or off.

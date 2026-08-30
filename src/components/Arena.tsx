@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import type { GameConfig, TeamId } from '@/game/types';
 import { CATEGORY_EMOJI, CATEGORY_LABEL, ROUND_INFO } from '@/game/types';
 import {
-  buildRounds, currentQuestion, currentRound, initialState, pointsFor, reducer, usesLockIn, winnerOf, CHAIN_LADDER,
+  buildRounds, currentQuestion, currentRound, initialState, pointsFor, reducer, turnTeam, usesLockIn, winnerOf, CHAIN_LADDER,
 } from '@/game/engine';
+import { playingTeams } from '@/game/types';
 import { sfx } from '@/game/sfx';
 import {
   BuzzBanner, Confetti, OpeningPlayer, PRELOAD_AHEAD, RevealImage, ScoreNumber, TimerBar, TimerRing, Toast, Verdict,
@@ -32,6 +33,11 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
   const round = currentRound(state);
   const q = currentQuestion(state);
   const teamOf = (id: TeamId) => config.teams.find((t) => t.id === id)!;
+  // One entry in a solo game, so every two-team layout below collapses to one.
+  const teams = playingTeams(config);
+  const turn = turnTeam(state);
+  // Whether the answer keys, rather than the buzzers, are what this round uses.
+  const lockInKeys = usesLockIn(state);
 
   // The rest of the round's tracks, so the player can pull them ahead of time
   // instead of making the room wait once per song. Memoised on the index so the
@@ -81,9 +87,12 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
   // game keeps moving on its own.
   useEffect(() => {
     if (config.hosted || state.phase !== 'revealed') return;
+    // The Chain is the exception: moving on by itself would take the decision
+    // the round is built around — bank it or risk it — away from the player.
+    if (round?.kind === 'chain') return;
     const t = setTimeout(() => dispatch({ type: 'next' }), 3800);
     return () => clearTimeout(t);
-  }, [config.hosted, state.phase, state.qIndex, state.roundIndex]);
+  }, [config.hosted, round?.kind, state.phase, state.qIndex, state.roundIndex]);
 
   /* --------------------------------------------------------- shortcuts */
 
@@ -102,7 +111,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
 
       // Multiple choice: each team has its own key block.
       if ((round?.kind === 'mcq' || !config.hosted) && state.phase === 'question' && q) {
-        for (const team of ['a', 'b'] as TeamId[]) {
+        for (const team of teams) {
           const idx = MCQ_KEYS[team].indexOf(e.key);
           if (idx >= 0 && q.choices[idx]) {
             sfx.select();
@@ -207,7 +216,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
   const Scoreboard = (
     <div className="wrap">
       <div className="scoreboard">
-        {(['a', 'b'] as TeamId[]).map((id) => {
+        {teams.map((id) => {
           const team = teamOf(id);
           const active = round?.kind === 'rapid' ? state.rapidTeam === id
             : round?.kind === 'chain' ? state.chainTeam === id : false;
@@ -225,7 +234,13 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="team-name">{team.name}</div>
                 <div className="team-meta">
-                  {active ? 'their turn' : state.lockedOut.includes(id) ? 'locked out' : `buzz: ${TEAM_KEY[id]}`}
+                  {active ? 'their turn'
+                    : state.lockedOut.includes(id) ? 'locked out'
+                    // Advertising a buzzer key in a game with no buzzers is the
+                    // clearest way to make a no-host game look like a hosted one.
+                    : config.solo ? 'solo run'
+                    : lockInKeys ? `keys ${MCQ_KEYS[id][0]}–${MCQ_KEYS[id][3]}`
+                    : `buzz: ${TEAM_KEY[id]}`}
                 </div>
               </div>
               <ScoreNumber value={state.scores[id]} bump={state.scoreFx[id]} colour={team.colour} />
@@ -242,7 +257,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
 
   const buzzers = (
     <div className="buzz-row">
-      {(['a', 'b'] as TeamId[]).map((id) => {
+      {teams.map((id) => {
         const team = teamOf(id);
         return (
           <button
@@ -306,10 +321,10 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
       <div className="wrap podium">
         <p className="eyebrow">Final result</p>
         <h1 className="winner-name display" style={{ ['--c' as string]: champ?.colour ?? '#fff' }}>
-          {champ ? `${champ.name} wins` : "It's a tie"}
+          {config.solo ? `${state.scores.a} points` : champ ? `${champ.name} wins` : "It's a tie"}
         </h1>
         <div className="final-scores">
-          {(['a', 'b'] as TeamId[]).map((id) => (
+          {teams.map((id) => (
             <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour }}>
               <div className="team-meta">{teamOf(id).name}</div>
               <div className="team-score" style={{ ['--c' as string]: teamOf(id).colour }}>{state.scores[id]}</div>
@@ -328,7 +343,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
         <p className="eyebrow">Round {state.roundIndex + 1} complete</p>
         <h2 className="display" style={{ fontSize: 'clamp(2rem,6vw,4rem)' }}>{round && ROUND_INFO[round.kind].title}</h2>
         <div className="final-scores">
-          {(['a', 'b'] as TeamId[]).map((id) => (
+          {teams.map((id) => (
             <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour }}>
               <div className="team-meta">{teamOf(id).name}</div>
               <div className="team-score" style={{ ['--c' as string]: teamOf(id).colour }}>{state.scores[id]}</div>
@@ -375,10 +390,12 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
         <p className="eyebrow">Final Wager</p>
         <h2 className="display" style={{ fontSize: 'clamp(2rem,6vw,3.4rem)' }}>Place your bets</h2>
         <p className="muted" style={{ maxWidth: '44ch' }}>
-          Each team bets before seeing the question. Get it right and you win the bet — get it wrong and you lose it.
+          {config.solo
+            ? 'Bet before you see the question. Get it right and you win the bet — get it wrong and you lose it.'
+            : 'Each team bets before seeing the question. Get it right and you win the bet — get it wrong and you lose it.'}
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 18, width: 'min(92vw,620px)' }}>
-          {(['a', 'b'] as TeamId[]).map((id) => (
+          {teams.map((id) => (
             <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour, textAlign: 'center' }}>
               <div className="team-meta">{teamOf(id).name}</div>
               <div className="muted" style={{ fontSize: '0.82em', marginBottom: 10 }}>has {state.scores[id]} points</div>
@@ -408,6 +425,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
           <MimicRound
             key={q.id}
             reference={reference}
+            teams={teams}
             teamNames={{ a: teamOf('a').name, b: teamOf('b').name }}
             teamColours={{ a: teamOf('a').colour, b: teamOf('b').colour }}
             sabotages={sabotages}
@@ -486,7 +504,13 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
         {showChoices && (
           <div className="choices">
             {q.choices.map((choice, i) => {
-              const pickedBy = (['a', 'b'] as TeamId[]).filter((t) => state.picks[t] === choice);
+              // Only after the reveal. Showing this live put a chip with the
+              // team's name on the option they had chosen, which the other team
+              // could simply read off the screen and copy — the whole point of
+              // locking in separately was lost.
+              const pickedBy = revealed
+                ? teams.filter((t) => state.picks[t] === choice)
+                : [];
               const stateAttr = revealed
                 ? choice === q.answer ? 'correct' : pickedBy.length ? 'wrong' : 'muted'
                 : undefined;
@@ -497,8 +521,9 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
                   data-state={stateAttr}
                   disabled={revealed || !lockIn}
                   onClick={() => {
-                    // Tapping assigns to whichever team has not locked in yet.
-                    const team: TeamId | null = !state.picks.a ? 'a' : !state.picks.b ? 'b' : null;
+                    // Rounds that belong to one team go to that team; otherwise
+                    // a tap assigns to whoever has not locked in yet.
+                    const team: TeamId | null = turn ?? teams.find((t) => !state.picks[t]) ?? null;
                     if (!team) return;
                     sfx.select();
                     dispatch({ type: 'lock', team, choice });
@@ -519,21 +544,40 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
           </div>
         )}
 
+        {/* Who has answered, without saying what they answered. */}
+        {lockIn && !revealed && teams.some((t) => state.picks[t]) && (
+          <p className="muted" style={{ fontSize: '0.9em' }}>
+            {teams.filter((t) => state.picks[t]).map((t) => (
+              <b key={t} style={{ color: teamOf(t).colour }}>{teamOf(t).name} locked in. </b>
+            ))}
+            {teams.some((t) => !state.picks[t]) && 'Waiting…'}
+          </p>
+        )}
+
         {lockIn && !revealed && (
           <p className="muted" style={{ fontSize: '0.86em' }}>
-            <b style={{ color: teamOf('a').colour }}>{teamOf('a').name}</b> presses{' '}
-            <span className="kbd">1</span>–<span className="kbd">4</span> &nbsp;·&nbsp;
-            <b style={{ color: teamOf('b').colour }}>{teamOf('b').name}</b> presses{' '}
-            <span className="kbd">7</span>–<span className="kbd">0</span>
+            {config.solo ? (
+              <>Press <span className="kbd">1</span>–<span className="kbd">4</span> to answer</>
+            ) : turn ? (
+              <><b style={{ color: teamOf(turn).colour }}>{teamOf(turn).name}</b>{"'"}s turn — press{' '}
+                <span className="kbd">{turn === 'a' ? '1' : '7'}</span>–<span className="kbd">{turn === 'a' ? '4' : '0'}</span></>
+            ) : (
+              <>
+                <b style={{ color: teamOf('a').colour }}>{teamOf('a').name}</b> presses{' '}
+                <span className="kbd">1</span>–<span className="kbd">4</span> &nbsp;·&nbsp;
+                <b style={{ color: teamOf('b').colour }}>{teamOf('b').name}</b> presses{' '}
+                <span className="kbd">7</span>–<span className="kbd">0</span>
+              </>
+            )}
           </p>
         )}
 
         {/* Buzzers for the race rounds. */}
         {config.hosted && BUZZ_ROUNDS.includes(round.kind) && !revealed && buzzers}
 
-        {round.kind === 'wager' && !revealed && (
+        {round.kind === 'wager' && !revealed && config.hosted && (
           <div className="row gap wrap-w" style={{ justifyContent: 'center' }}>
-            {(['a', 'b'] as TeamId[]).map((id) => (
+            {teams.map((id) => (
               <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour, textAlign: 'center', minWidth: 210 }}>
                 <div className="team-meta">{teamOf(id).name} bet {state.wagers[id]}</div>
                 <div className="row gap-sm" style={{ justifyContent: 'center', marginTop: 12 }}>
@@ -549,6 +593,31 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
       </div>
     );
   }
+
+  /* -------------------------------------------------------- player bar */
+
+  // Without a host there is no control bar, but two things still need a hand:
+  // banking the chain, and moving on from a chain question once that call has
+  // been made. Everything else the screen decides for itself.
+  const playerBar = !config.hosted && round?.kind === 'chain'
+    && !['game-end', 'round-intro', 'round-end'].includes(state.phase) && (
+    <div className="hostbar">
+      <div className="wrap hostbar-inner">
+        <span className="eyebrow" style={{ color: teamOf(state.chainTeam).colour }}>
+          {config.solo ? 'Your chain' : `${teamOf(state.chainTeam).name}'s chain`}
+        </span>
+        <button className="btn btn-gold" disabled={state.chainPot === 0}
+          onClick={() => { sfx.bank(); dispatch({ type: 'chain-bank' }); }}>
+          🏦 Bank {state.chainPot || ''}
+        </button>
+        {state.phase === 'revealed' && (
+          <button className="btn btn-primary" onClick={() => dispatch({ type: 'next' })}>
+            {state.chainPot > 0 ? 'Risk it →' : 'Next →'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 
   /* ---------------------------------------------------------- host bar */
 
@@ -613,7 +682,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
         )}
 
         <span className="divider" />
-        {(['a', 'b'] as TeamId[]).map((id) => (
+        {teams.map((id) => (
           <span key={id} className="row gap-xs">
             <button className="btn btn-sm btn-ghost" onClick={() => dispatch({ type: 'adjust', team: id, delta: -5 })}
               title={`Remove 5 from ${teamOf(id).name}`}>−5</button>
@@ -635,6 +704,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
       {Scoreboard}
       {stage}
       {hostBar}
+      {playerBar}
 
       {state.banner.team && (
         <BuzzBanner

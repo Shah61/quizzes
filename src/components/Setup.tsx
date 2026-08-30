@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Category, GameConfig, RoundKind, Team } from '@/game/types';
-import { CATEGORY_EMOJI, CATEGORY_LABEL, ROUND_INFO, TEAM_COLOURS } from '@/game/types';
+import { CATEGORY_EMOJI, CATEGORY_LABEL, ROUND_INFO, SOLO_ROUNDS, TEAM_COLOURS } from '@/game/types';
 import { categorySize, clearMimicCache } from '@/game/content';
 import { listClips } from '@/game/mimic-clips';
 import {
@@ -13,16 +13,19 @@ import { sfx } from '@/game/sfx';
 const ALL_CATEGORIES: Category[] = ['anime', 'minecraft', 'terraria', 'marvel', 'general', 'songs', 'malaysia'];
 const ALL_ROUNDS: RoundKind[] = ['buzz', 'reveal', 'opening', 'ending', 'mimic', 'voice', 'rapid', 'chain', 'mcq', 'wager'];
 
-export default function Setup({ onStart, onBack, onStudio }: {
+export default function Setup({ onStart, onBack, onStudio, solo = false }: {
   onStart: (c: GameConfig) => void;
   onBack: () => void;
   onStudio: () => void;
+  /** One player against the questions — no second team, no host. */
+  solo?: boolean;
 }) {
-  const [nameA, setNameA] = useState('Team Red');
+  const [nameA, setNameA] = useState(solo ? 'You' : 'Team Red');
   const [nameB, setNameB] = useState('Team Blue');
   const [colourA, setColourA] = useState(TEAM_COLOURS[1]);
   const [colourB, setColourB] = useState(TEAM_COLOURS[0]);
-  const [hosted, setHosted] = useState(true);
+  // A solo game has nobody to host it and nobody to host it for.
+  const [hosted, setHosted] = useState(!solo);
   const [categories, setCategories] = useState<Category[]>(ALL_CATEGORIES);
   const [rounds, setRounds] = useState<RoundKind[]>(['buzz', 'reveal', 'opening', 'rapid', 'chain', 'wager']);
   const [perRound, setPerRound] = useState(5);
@@ -63,22 +66,27 @@ export default function Setup({ onStart, onBack, onStudio }: {
     set((list) => (list.includes(value) ? list.filter((v) => v !== value) : [...list, value]));
   };
 
-  // No-host play needs rounds the screen can score on its own.
-  const effectiveRounds = hosted ? rounds : rounds.filter((r) => ['mcq', 'reveal', 'opening', 'ending'].includes(r));
+  // Every round scores itself now, so the only filter left is solo: Voice
+  // Battle is two teams performing and the room voting between them, which does
+  // not reduce to one player.
+  const allowed = (r: RoundKind) => (solo ? SOLO_ROUNDS.includes(r) : true);
+  const effectiveRounds = rounds.filter(allowed);
   // Picking Mimic with nothing to mimic would build an empty round.
-  const mimicReady = !hosted || !mimicOn || mimicTotal > 0;
-  const ready = categories.length > 0 && effectiveRounds.length > 0 && nameA.trim() && nameB.trim() && mimicReady;
+  const mimicReady = !mimicOn || mimicTotal > 0;
+  const ready = categories.length > 0 && effectiveRounds.length > 0 && nameA.trim()
+    && (solo || nameB.trim()) && mimicReady;
 
   const start = () => {
     if (!ready) return;
     sfx.start();
     const teams: [Team, Team] = [
-      { id: 'a', name: nameA.trim() || 'Team A', colour: colourA, score: 0 },
+      { id: 'a', name: nameA.trim() || (solo ? 'You' : 'Team A'), colour: colourA, score: 0 },
+      // Solo still carries a second team so the shape of the config never
+      // changes; playingTeams() is what decides who is actually in the game.
       { id: 'b', name: nameB.trim() || 'Team B', colour: colourB, score: 0 },
     ];
-    // In no-host mode every round is multiple choice so nothing needs adjudicating.
-    const chosen = hosted ? rounds : (effectiveRounds.length ? effectiveRounds : (['mcq'] as RoundKind[]));
-    onStart({ teams, categories, rounds: chosen, hosted, questionsPerRound: perRound, mimicSources });
+    const chosen = effectiveRounds.length ? effectiveRounds : (['mcq'] as RoundKind[]);
+    onStart({ teams, categories, rounds: chosen, hosted, solo, questionsPerRound: perRound, mimicSources });
   };
 
   return (
@@ -86,20 +94,20 @@ export default function Setup({ onStart, onBack, onStudio }: {
       <div className="wrap">
         <div className="topbar">
           <button className="btn btn-ghost btn-sm" onClick={onBack}>← Back</button>
-          <h2 className="display" style={{ fontSize: '1.5rem' }}>Set up the game</h2>
+          <h2 className="display" style={{ fontSize: '1.5rem' }}>{solo ? 'Set up your solo run' : 'Set up the game'}</h2>
         </div>
 
         <div className="setup-grid" style={{ paddingTop: 22 }}>
           {/* ------------------------------------------------ teams */}
           <section className="panel panel-lg" style={{ padding: 24 }}>
-            <p className="label" style={{ marginBottom: 16 }}>The two teams</p>
+            <p className="label" style={{ marginBottom: 16 }}>{solo ? 'You' : 'The two teams'}</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 22 }}>
               {([
                 { name: nameA, setName: setNameA, colour: colourA, setColour: setColourA, side: 'A' },
-                { name: nameB, setName: setNameB, colour: colourB, setColour: setColourB, side: 'B' },
+                ...(solo ? [] : [{ name: nameB, setName: setNameB, colour: colourB, setColour: setColourB, side: 'B' }]),
               ]).map((t) => (
                 <div key={t.side} className="field">
-                  <span className="label">Team {t.side}</span>
+                  <span className="label">{solo ? 'Your name' : `Team ${t.side}`}</span>
                   <input
                     className="input"
                     value={t.name}
@@ -125,7 +133,7 @@ export default function Setup({ onStart, onBack, onStudio }: {
           </section>
 
           {/* ------------------------------------------------ host mode */}
-          <section className="panel panel-lg" style={{ padding: 24 }}>
+          <section className="panel panel-lg" style={{ padding: 24, display: solo ? 'none' : undefined }}>
             <p className="label" style={{ marginBottom: 14 }}>Who runs the game?</p>
             <div className="seg" role="group">
               <button data-on={hosted} onClick={() => { sfx.select(); setHosted(true); }}>🎙️ I am the host</button>
@@ -134,7 +142,7 @@ export default function Setup({ onStart, onBack, onStudio }: {
             <p className="muted" style={{ marginTop: 14, fontSize: '0.9em', maxWidth: '62ch' }}>
               {hosted
                 ? 'You get the full control bar: mark answers right or wrong, drop hints, award or remove points, pause the clock and skip anything you do not like.'
-                : 'Every question becomes multiple choice and the screen scores it. Team A answers with keys 1–4, Team B with 7–0, or just tap.'}
+                : 'Every round becomes multiple choice and the screen scores it — buzzers, rapid fire, the chain and the wager included. Team A answers with keys 1–4, Team B with 7–0, or just tap.'}
             </p>
           </section>
 
@@ -163,14 +171,16 @@ export default function Setup({ onStart, onBack, onStudio }: {
           <section className="panel panel-lg" style={{ padding: 24 }}>
             <p className="label" style={{ marginBottom: 6 }}>Rounds &amp; running order</p>
             <p className="muted" style={{ fontSize: '0.88em', marginBottom: 16 }}>
-              {hosted
-                ? 'Pick the rounds you want. They play in this order.'
-                : 'Without a host only the self-scoring rounds are available.'}
+              {solo
+                ? 'Pick the rounds you want. They play in this order. Voice Battle needs two teams and a vote, so it sits this one out.'
+                : hosted
+                  ? 'Pick the rounds you want. They play in this order.'
+                  : 'Pick the rounds you want — the screen runs and scores all of them.'}
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 10 }}>
               {ALL_ROUNDS.map((r) => {
                 const info = ROUND_INFO[r];
-                const usable = hosted || ['mcq', 'reveal', 'opening', 'ending'].includes(r);
+                const usable = allowed(r);
                 const on = rounds.includes(r) && usable;
                 return (
                   <button
@@ -193,7 +203,7 @@ export default function Setup({ onStart, onBack, onStudio }: {
           </section>
 
           {/* ------------------------------------------------ mimic sources */}
-          {mimicOn && hosted && (
+          {mimicOn && (
             <section className="panel panel-lg" style={{ padding: 24 }}>
               <div className="row wrap-w gap-sm" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
                 <p className="label">🔊 What the Mimic round plays</p>
@@ -244,7 +254,7 @@ export default function Setup({ onStart, onBack, onStudio }: {
           </section>
 
           <button className="btn btn-primary btn-lg" onClick={start} disabled={!ready} style={{ justifySelf: 'center', marginTop: 8 }}>
-            Start the show →
+            {solo ? 'Start playing →' : 'Start the show →'}
           </button>
           {!ready && (
             <p className="muted" style={{ textAlign: 'center', fontSize: '0.88em' }}>

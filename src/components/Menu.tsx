@@ -3,7 +3,7 @@
 import { CONTENT_STATS } from '@/game/content';
 import { primeAudio, sfx } from '@/game/sfx';
 
-export default function Menu({ onArena, onJapanese }: { onArena: () => void; onJapanese: () => void }) {
+export default function Menu({ onArena, onSolo, onJapanese }: { onArena: () => void; onSolo: () => void; onJapanese: () => void }) {
   const go = (fn: () => void) => () => { primeAudio(); sfx.select(); fn(); };
   const total = CONTENT_STATS.text + CONTENT_STATS.characters + CONTENT_STATS.animeTitles
     + CONTENT_STATS.openings + CONTENT_STATS.minecraft + CONTENT_STATS.terraria + CONTENT_STATS.malaysia;
@@ -35,6 +35,21 @@ export default function Menu({ onArena, onJapanese }: { onArena: () => void; onJ
               <span className="tag">2 teams</span>
               <span className="tag">7 round types</span>
               <span className="tag">Host or no host</span>
+            </span>
+          </button>
+
+          <button className="mode-card" onClick={go(onSolo)} style={{ ['--glow' as string]: 'rgba(34,211,238,0.5)' }}>
+            <span className="mode-emoji">🎯</span>
+            <span className="mode-name display">Solo Run</span>
+            <span className="mode-desc">
+              Just you against the questions. Every round the screen can score by itself —
+              buzzer, pixel reveal, openings, rapid fire, the chain, mimic and a final
+              wager. No host, no second team, no waiting your turn.
+            </span>
+            <span className="mode-tags">
+              <span className="tag">1 player</span>
+              <span className="tag">8 round types</span>
+              <span className="tag">Self-scoring</span>
             </span>
           </button>
 

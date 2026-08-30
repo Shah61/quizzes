@@ -9,7 +9,7 @@ import Japanese from '@/components/Japanese';
 import ClipStudio from '@/components/ClipStudio';
 import VolumeControl from '@/components/VolumeControl';
 
-type View = 'menu' | 'setup' | 'arena' | 'japanese' | 'studio';
+type View = 'menu' | 'setup' | 'solo-setup' | 'arena' | 'japanese' | 'studio';
 
 export default function Page() {
   const [view, setView] = useState<View>('menu');
@@ -18,15 +18,25 @@ export default function Page() {
   const screen =
     view === 'japanese' ? <Japanese onExit={() => setView('menu')} />
     : view === 'studio' ? <ClipStudio onBack={() => setView('setup')} />
-    : view === 'arena' && config ? <Arena config={config} onExit={() => setView('setup')} />
-    : view === 'setup' ? (
+    : view === 'arena' && config ? (
+      <Arena config={config} onExit={() => setView(config.solo ? 'solo-setup' : 'setup')} />
+    )
+    : view === 'setup' || view === 'solo-setup' ? (
       <Setup
+        key={view}
+        solo={view === 'solo-setup'}
         onBack={() => setView('menu')}
         onStudio={() => setView('studio')}
         onStart={(c) => { setConfig(c); setView('arena'); }}
       />
     )
-    : <Menu onArena={() => setView('setup')} onJapanese={() => setView('japanese')} />;
+    : (
+      <Menu
+        onArena={() => setView('setup')}
+        onSolo={() => setView('solo-setup')}
+        onJapanese={() => setView('japanese')}
+      />
+    );
 
   return (
     <>

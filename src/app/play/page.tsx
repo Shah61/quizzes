@@ -263,7 +263,9 @@ function PlayScreen() {
           <p className="muted" style={{ fontSize: '0.9em' }}>
             {s.activeTeam && s.activeTeam !== team
               ? `${teamName(s.activeTeam)} is answering…`
-              : s.activeTeam === team ? 'Your team is up — answer out loud!' : 'Answer out loud for the host.'}
+              : s.activeTeam === team
+                ? 'Your team is up — answer out loud!'
+                : s.hosted ? 'Answer out loud for the host.' : 'Watch the screen…'}
           </p>
         )}
 

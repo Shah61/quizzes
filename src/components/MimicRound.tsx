@@ -31,9 +31,11 @@ const WHEEL: { sabotage: Exclude<Sabotage, null>; weight: number }[] = [
  * AudioBuffer, so from here down there is only one kind of round.
  */
 export default function MimicRound({
-  reference, teamNames, teamColours, sabotages, onFinish,
+  reference, teams, teamNames, teamColours, sabotages, onFinish,
 }: {
   reference: MimicRef;
+  /** Who is taking a shot at this one. A solo run has a single entry. */
+  teams: TeamId[];
   teamNames: Record<TeamId, string>;
   teamColours: Record<TeamId, string>;
   /** Sabotage aimed at each team for this round, from the previous wheel. */
@@ -41,7 +43,7 @@ export default function MimicRound({
   onFinish: (winner: TeamId | null, scores: Record<TeamId, number>, nextSabotage: { team: TeamId; sabotage: Sabotage } | null) => void;
 }) {
   const [phase, setPhase] = useState<Phase>('loading');
-  const [turn, setTurn] = useState<TeamId>('a');
+  const [turn, setTurn] = useState<TeamId>(teams[0] ?? 'a');
   const [count, setCount] = useState(3);
   const [results, setResults] = useState<Partial<Record<TeamId, Result>>>({});
   const [nowPlaying, setNowPlaying] = useState<TeamId | null>(null);
@@ -64,7 +66,7 @@ export default function MimicRound({
     let cancelled = false;
     setPhase('loading');
     setLoadError(null);
-    setTurn('a');
+    setTurn(teams[0] ?? 'a');
     setResults({});
     setSpun(null);
     (async () => {
@@ -126,9 +128,12 @@ export default function MimicRound({
     }
     setResults((prev) => ({ ...prev, [team]: result }));
 
-    if (team === 'a') { setTurn('b'); setPhase('intro'); }
+    // Hand over to the next team that has not been up yet; when there is none
+    // left — which in a solo run is immediately — go to the scores.
+    const next = teams[teams.indexOf(team) + 1];
+    if (next) { setTurn(next); setPhase('intro'); }
     else { setPhase('results'); sfx.reveal(); }
-  }, [start, stop, takeSeconds]);
+  }, [start, stop, takeSeconds, teams]);
 
   /* ---------------------------------------------------------- playback */
 
@@ -148,17 +153,21 @@ export default function MimicRound({
     // A short shuffle before it settles, so the wheel feels like it spun.
     for (let i = 0; i < 10; i++) {
       const s = WHEEL[Math.floor(Math.random() * WHEEL.length)].sabotage;
-      setSpun({ team: Math.random() < 0.5 ? 'a' : 'b', sabotage: s });
+      // Only ever lands on somebody who is actually playing.
+      setSpun({ team: teams[Math.floor(Math.random() * teams.length)], sabotage: s });
       sfx.tick();
       await new Promise((r) => setTimeout(r, 90 + i * 22));
     }
     sfx.bank();
     setSpinning(false);
-  }, []);
+  }, [teams]);
 
   const scoreA = results.a?.score.total ?? 0;
   const scoreB = results.b?.score.total ?? 0;
-  const winner: TeamId | null = scoreA === scoreB ? null : scoreA > scoreB ? 'a' : 'b';
+  // Alone there is nobody to beat, so the take always takes the round's points.
+  const solo = teams.length === 1;
+  const winner: TeamId | null = solo ? teams[0]
+    : scoreA === scoreB ? null : scoreA > scoreB ? 'a' : 'b';
 
   /* -------------------------------------------------------------- views */
 
@@ -238,7 +247,7 @@ export default function MimicRound({
         </div>
 
         <div className="mimic-scores">
-          {(['a', 'b'] as TeamId[]).map((team) => {
+          {teams.map((team) => {
             const res = results[team];
             const sab = sabotages[team];
             return (
@@ -314,7 +323,9 @@ export default function MimicRound({
       </div>
 
       <p className="dim" style={{ fontSize: '0.85em' }}>
-        {turn === 'a' ? 'Team A goes first' : `${teamNames.a} scored ${scoreA}. ${teamNames.b} is up.`}
+        {solo ? 'One shot — make it count'
+          : turn === 'a' ? 'Team A goes first'
+          : `${teamNames.a} scored ${scoreA}. ${teamNames.b} is up.`}
       </p>
     </div>
   );

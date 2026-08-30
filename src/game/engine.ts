@@ -1,5 +1,5 @@
 import type { GameConfig, Question, RoundKind, RoundSpec, TeamId } from './types';
-import { ROUND_INFO } from './types';
+import { ROUND_INFO, playingTeams } from './types';
 import { questionsFor } from './content';
 
 export type Phase =
@@ -78,6 +78,24 @@ export type Action =
 
 const OTHER = (t: TeamId): TeamId => (t === 'a' ? 'b' : 'a');
 
+/** The teams in this game — one of them in a solo run. */
+export const teamsIn = (state: State): TeamId[] => playingTeams(state.config);
+
+/**
+ * Rounds that are one team at a time rather than a race.
+ *
+ * Rapid Fire and The Chain belong to whoever's turn it is, and that stays true
+ * without a host: the other side must not be able to answer for them. Returns
+ * null for rounds where everyone answers at once.
+ */
+export function turnTeam(state: State): TeamId | null {
+  const round = currentRound(state);
+  if (!round) return null;
+  if (round.kind === 'rapid') return state.rapidTeam;
+  if (round.kind === 'chain') return state.chainTeam;
+  return null;
+}
+
 /* --------------------------------------------------------------- setup */
 
 export function buildRounds(config: GameConfig): RoundSpec[] {
@@ -152,6 +170,9 @@ export const isTimedRound = (kind: RoundKind) => ['reveal', 'opening', 'ending',
 export function usesLockIn(state: State): boolean {
   const round = currentRound(state);
   if (!round) return false;
+  // These two bring their own interface — a performance and a recording — and
+  // there is nothing to pick from, host or not.
+  if (round.kind === 'voice' || round.kind === 'mimic') return false;
   return !state.config.hosted || round.kind === 'mcq';
 }
 
@@ -322,10 +343,20 @@ export function reducer(state: State, action: Action): State {
     case 'lock': {
       if (!round || !usesLockIn(state) || state.phase !== 'question') return state;
       if (state.picks[action.team]) return state; // locked in already
+      // Rapid Fire and The Chain are somebody's turn, not a free-for-all.
+      const turn = turnTeam(state);
+      if (turn && action.team !== turn) return state;
+
       const picks = { ...state.picks, [action.team]: action.choice };
       const pickOrder = [...state.pickOrder, action.team];
-      const both = picks.a && picks.b;
-      if (!both) return { ...state, picks, pickOrder };
+
+      // These two resolve the moment the team whose turn it is answers, rather
+      // than waiting for an opponent who is not taking this question.
+      if (round.kind === 'rapid') return answerRapid({ ...state, picks, pickOrder }, action.team, action.choice);
+      if (round.kind === 'chain') return answerChain({ ...state, picks, pickOrder }, action.choice);
+
+      const waitingOn = teamsIn(state).filter((t) => !picks[t]);
+      if (waitingOn.length) return { ...state, picks, pickOrder };
       return scoreMcq({ ...state, picks, pickOrder });
     }
 
@@ -405,7 +436,9 @@ export function reducer(state: State, action: Action): State {
       // Clock hit zero — what that means depends on the round.
       if (round?.kind === 'rapid') {
         const done = [...state.rapidDone, state.rapidTeam];
-        if (done.length >= 2) return { ...state, timeLeft: 0, running: false, phase: 'round-end', rapidDone: done };
+        if (done.length >= teamsIn(state).length) {
+          return { ...state, timeLeft: 0, running: false, phase: 'round-end', rapidDone: done };
+        }
         const nextTeam = OTHER(state.rapidTeam);
         return {
           ...state,
@@ -454,17 +487,107 @@ export function reducer(state: State, action: Action): State {
   }
 }
 
-/** Both teams have picked (or time ran out): score it automatically. */
+/**
+ * Rapid Fire without a host: the team on the clock answers, it scores itself,
+ * and the round moves straight on. No reveal — the clock is the pressure, and
+ * stopping to show an answer after each one would waste the minute.
+ */
+function answerRapid(state: State, team: TeamId, choice: string): State {
+  const round = currentRound(state);
+  const q = currentQuestion(state);
+  if (!round || !q) return state;
+  const correct = choice === q.answer;
+  const next = state.qIndex + 1;
+  // Running out of questions ends the turn early — the pile is deep but finite.
+  const exhausted = next >= round.questions.length;
+  const base = {
+    ...state,
+    qIndex: exhausted ? state.qIndex : next,
+    hintShown: false,
+    picks: {},
+    pickOrder: [],
+    phase: (exhausted ? 'round-end' : state.phase) as State['phase'],
+    running: exhausted ? false : state.running,
+    fx: { kind: (correct ? 'good' : 'bad') as 'good' | 'bad', nonce: state.fx.nonce + 1 },
+  };
+  if (!correct) return base;
+  return {
+    ...base,
+    scores: { ...state.scores, [team]: state.scores[team] + round.points },
+    rapidScored: { ...state.rapidScored, [team]: state.rapidScored[team] + 1 },
+    scoreFx: { ...state.scoreFx, [team]: state.scoreFx[team] + 1 },
+  };
+}
+
+/**
+ * The Chain without a host. Same ladder the host version uses: a correct answer
+ * moves the pot up a rung, a wrong one wipes it and hands the chain over.
+ */
+function answerChain(state: State, choice: string): State {
+  const q = currentQuestion(state);
+  if (!q) return state;
+  if (choice === q.answer) {
+    const streak = state.chainStreak + 1;
+    return {
+      ...state,
+      chainStreak: streak,
+      chainPot: CHAIN_LADDER[Math.min(streak - 1, CHAIN_LADDER.length - 1)],
+      phase: 'revealed',
+      running: false,
+      fx: { kind: 'good', nonce: state.fx.nonce + 1 },
+    };
+  }
+  const solo = state.config.solo;
+  return {
+    ...state,
+    chainStreak: 0,
+    chainPot: 0,
+    // With nobody to hand it to, a solo chain just starts again.
+    chainTeam: solo ? state.chainTeam : OTHER(state.chainTeam),
+    phase: 'revealed',
+    running: false,
+    fx: { kind: 'bad', nonce: state.fx.nonce + 1 },
+    toast: { text: 'Chain broken — the pot is gone', nonce: (state.toast?.nonce ?? 0) + 1 },
+  };
+}
+
+/** Everyone has picked (or time ran out): score it automatically. */
 function scoreMcq(state: State): State {
   const round = currentRound(state);
   const q = currentQuestion(state);
   if (!round || !q) return state;
+  const teams = teamsIn(state);
+
+  // The wager round is settled against what each team bet, not the round's
+  // point value — which is zero, so scoring it the normal way awards nothing.
+  if (round.kind === 'wager') {
+    const scores = { ...state.scores };
+    const scoreFx = { ...state.scoreFx };
+    const wagerResult: Partial<Record<TeamId, boolean>> = { ...state.wagerResult };
+    let anyRight = false;
+    for (const team of teams) {
+      const correct = state.picks[team] === q.answer;
+      wagerResult[team] = correct;
+      if (correct) anyRight = true;
+      scores[team] = Math.max(0, scores[team] + (correct ? state.wagers[team] : -state.wagers[team]));
+      scoreFx[team] += 1;
+    }
+    return {
+      ...state,
+      scores,
+      scoreFx,
+      wagerResult,
+      phase: 'revealed',
+      running: false,
+      fx: { kind: anyRight ? 'good' : 'bad', nonce: state.fx.nonce + 1 },
+    };
+  }
 
   const scores = { ...state.scores };
   const scoreFx = { ...state.scoreFx };
   let firstCorrect: TeamId | null = null;
 
-  for (const team of ['a', 'b'] as TeamId[]) {
+  for (const team of teams) {
     if (state.picks[team] !== q.answer) continue;
     scores[team] += round.points;
     scoreFx[team] += 1;
@@ -475,7 +598,7 @@ function scoreMcq(state: State): State {
     }
   }
 
-  const anyCorrect = (['a', 'b'] as TeamId[]).some((t) => state.picks[t] === q.answer);
+  const anyCorrect = teams.some((t) => state.picks[t] === q.answer);
   return {
     ...state,
     scores,
@@ -487,6 +610,7 @@ function scoreMcq(state: State): State {
 }
 
 export function winnerOf(state: State): TeamId | 'tie' {
+  if (state.config.solo) return 'a';
   if (state.scores.a === state.scores.b) return 'tie';
   return state.scores.a > state.scores.b ? 'a' : 'b';
 }

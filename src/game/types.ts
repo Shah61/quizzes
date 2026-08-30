@@ -68,10 +68,23 @@ export interface GameConfig {
   categories: Category[];
   rounds: RoundKind[];
   hosted: boolean;
+  /** One player against the questions — team B is not in the game at all. */
+  solo: boolean;
   questionsPerRound: number;
   /** Which pools the Mimic round draws its references from. */
   mimicSources: MimicSourceId[];
 }
+
+/** The teams actually playing. Solo games have one. */
+export const playingTeams = (config: Pick<GameConfig, 'solo'>): TeamId[] =>
+  config.solo ? ['a'] : ['a', 'b'];
+
+/**
+ * Voice Battle is two teams performing the same character and the room voting
+ * between them, so there is nothing to run solo. Everything else works alone —
+ * Mimic included, because that one is scored by the machine rather than a vote.
+ */
+export const SOLO_ROUNDS: RoundKind[] = ['buzz', 'reveal', 'opening', 'ending', 'mimic', 'rapid', 'chain', 'mcq', 'wager'];
 
 export const CATEGORY_LABEL: Record<Category, string> = {
   anime: 'Anime',
