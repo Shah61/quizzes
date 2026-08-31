@@ -1,9 +1,19 @@
 'use client';
 
 import { CONTENT_STATS } from '@/game/content';
+import { useEffect, useState } from 'react';
 import { primeAudio, sfx } from '@/game/sfx';
+import { playedToday, readDaily, type DailyRecord } from '@/game/daily';
 
-export default function Menu({ onArena, onSolo, onJapanese }: { onArena: () => void; onSolo: () => void; onJapanese: () => void }) {
+export default function Menu({ onArena, onSolo, onDaily, onJapanese }: {
+  onArena: () => void; onSolo: () => void; onDaily: () => void; onJapanese: () => void;
+}) {
+  // Read after mount, never during render: the server has no localStorage, so
+  // rendering the streak straight away made the markup disagree with itself
+  // and React threw a hydration error over it.
+  const [daily, setDaily] = useState<DailyRecord | null>(null);
+  useEffect(() => { setDaily(readDaily()); }, []);
+  const done = daily ? playedToday(daily) : false;
   const go = (fn: () => void) => () => { primeAudio(); sfx.select(); fn(); };
   const total = CONTENT_STATS.text + CONTENT_STATS.characters + CONTENT_STATS.animeTitles
     + CONTENT_STATS.openings + CONTENT_STATS.minecraft + CONTENT_STATS.terraria + CONTENT_STATS.malaysia;
@@ -27,14 +37,29 @@ export default function Menu({ onArena, onSolo, onJapanese }: { onArena: () => v
             <span className="mode-emoji">🎬</span>
             <span className="mode-name display">Team Battle</span>
             <span className="mode-desc">
-              Two teams, seven rounds, one host. Anime, Minecraft, Terraria, Marvel, music,
-              Malaysia and general knowledge. Play with a host calling it, or let the screen
-              score everything by itself.
+              Two teams, eleven round types, thirteen topics — anime, games, film, science,
+              history, geography, sport and more. Play with a host calling it, or let the
+              screen run and score the whole thing by itself.
             </span>
             <span className="mode-tags">
               <span className="tag">2 teams</span>
-              <span className="tag">7 round types</span>
+              <span className="tag">11 round types</span>
               <span className="tag">Host or no host</span>
+            </span>
+          </button>
+
+          <button className="mode-card" onClick={go(onDaily)} style={{ ['--glow' as string]: 'rgba(255,197,61,0.55)' }}>
+            <span className="mode-emoji">📅</span>
+            <span className="mode-name display">Daily Challenge</span>
+            <span className="mode-desc">
+              Ten questions, the same ten for everyone playing today, drawn from every
+              topic in the game. Come back tomorrow for ten more and keep the streak
+              alive. Takes about two minutes.
+            </span>
+            <span className="mode-tags">
+              {daily && daily.streak > 0 && <span className="tag">🔥 {daily.streak} day streak</span>}
+              <span className="tag">{done ? '✓ Played today' : 'New today'}</span>
+              {daily && daily.bestScore > 0 && <span className="tag">Best {daily.bestScore}</span>}
             </span>
           </button>
 
@@ -43,12 +68,12 @@ export default function Menu({ onArena, onSolo, onJapanese }: { onArena: () => v
             <span className="mode-name display">Solo Run</span>
             <span className="mode-desc">
               Just you against the questions. Every round the screen can score by itself —
-              buzzer, pixel reveal, openings, rapid fire, the chain, mimic and a final
-              wager. No host, no second team, no waiting your turn.
+              buzzer, pixel reveal, openings, rapid fire, the chain, mimic, the world map
+              and a final wager. No host, no second team, no waiting your turn.
             </span>
             <span className="mode-tags">
               <span className="tag">1 player</span>
-              <span className="tag">8 round types</span>
+              <span className="tag">10 round types</span>
               <span className="tag">Self-scoring</span>
             </span>
           </button>

@@ -132,6 +132,111 @@ name on the option they had chosen the moment they locked it, which the other
 side could simply read off the screen. Online the same holds: the other team's
 pick is not in the data your device receives until the answer is out.
 
+## 🗺️ Where in the World
+
+A map round in the GeoGuessr mould. A country comes up with its flag and
+capital, each team gets one click on the world map, and the score is **how far
+off you were** rather than right or wrong — being 200km out should not feel the
+same as being on the wrong continent.
+
+Points decay exponentially with distance: same spot 100, 250km 87, 1,000km 57,
+2,500km 25, past 5,000km barely anything. Nobody's pin is drawn until everyone
+has guessed, so the second team cannot simply click where the first one did.
+
+The map is Natural Earth's country outlines, **public domain**, decoded from
+TopoJSON at build time into plain rings of coordinates and drawn as SVG in an
+equirectangular projection. There is no tile server, no API key and nothing
+fetched at play time — which also means no attribution banner to keep and no
+per-request bill, unlike the Google Maps tiles that the 3D globe projects
+(God's Eye View, WorldGuessr and GeoGuessr all sit on paid or keyed imagery).
+The outline pack is loaded on demand, so only a game that reaches the map round
+pays for it.
+
+## 🧭 Street View — the GeoGuessr one
+
+The proper version: you are dropped into a **street-level panorama** somewhere
+on earth with no name and no flag, you look around, and you drop a pin. Scored
+by distance exactly like the round above. The place is not named until everyone
+has committed.
+
+**This one needs a free Google Maps API key.** There is no way around it — the
+open alternatives ([Mapillary](https://www.mapillary.com), Panoramax) have real
+imagery under open licences but patchy coverage, and every polished version of
+this game sits on Google. WorldGuessr does the same thing this does.
+
+Set it up once:
+
+1. [console.cloud.google.com](https://console.cloud.google.com) → new project
+2. Enable **Maps Embed API** — this is the one Google still serves **free with
+   no usage limit**. Do *not* use the Street View Static or JavaScript APIs;
+   those bill per request.
+3. Credentials → Create credentials → API key
+4. **Restrict the key by HTTP referrer to your own domain.** The key travels in
+   an iframe URL, so it is public by design; the referrer restriction is what
+   stops anyone else spending it.
+
+```bash
+NEXT_PUBLIC_GOOGLE_MAPS_KEY=your-key-here
+```
+
+Then rebuild the locations so places Google has never photographed are dropped:
+
+```bash
+GOOGLE_MAPS_KEY=your-key npm run content:places
+```
+
+That pass uses Street View's **metadata** endpoint, which is also free, and
+keeps the exact coordinates of the panorama it finds rather than the city
+centre. Without the key the round is simply not offered in setup and everything
+else works as normal.
+
+### Two things the embed does that had to be handled
+
+**It prints the street address in the corner.** The Maps Embed API has no
+parameter to turn that off, and it hands over the answer before anyone has
+looked at the picture. That card is covered — and only that card. Google's
+wordmark and the Terms links along the foot of the frame are left completely
+alone, and the round's own controls sit above them, because obscuring the
+attribution is the one thing the Maps terms actually forbid. The cover also
+swallows clicks, since the card contains a "View on Google Maps" link that would
+otherwise open the answer in a new tab.
+
+**A pin is placed, then confirmed.** Guessing on a single click made every
+misclick final, and on an inset map a misclick is a thousand kilometres.
+
+### Where the locations come from
+
+1,567 places across 151 countries, from **GeoNames** cities15000 (CC BY 4.0) —
+every city over 15,000 people, capped at fourteen per country so the world does
+not turn into the United States, and biggest-first within each so the ones that
+survive the cap are recognisable. Countries with no Street View coverage at all
+are excluded outright: a blank screen is not a hard question, it is a broken
+one.
+
+## 📅 Daily Challenge
+
+Ten questions from the main menu, drawn from every topic, **the same ten for
+everyone who plays that day** — the set is seeded from the date, so two people
+comparing scores are comparing like for like. Takes about two minutes.
+
+Playing on consecutive days builds a **streak**, shown on the menu card along
+with your best score. Playing twice in one day updates your score but does not
+pad the streak. All of it lives in that browser; there is no server keeping
+score and nothing to sign up for.
+
+## ⌨️ Type it out
+
+Setup has a second answer mode. Instead of four options you type the answer,
+which is worth **half as many points again** — recognising a title in a list is
+a much smaller feat than producing it from nothing.
+
+Spelling, spacing, punctuation and word order are all forgiven, so *shingeki*
+takes Attack on Titan. Note that the same forgiving match is deliberately **not**
+used for multiple choice: it would accept "Naruto Shippuden" as an answer of
+"Naruto", and a wrong option that happens to contain the right one would score.
+
+It suits solo and online play best, where everyone answers on their own screen.
+
 ## 🎯 Solo Run
 
 A third option on the main menu: **one player against the questions**, no host
@@ -160,6 +265,8 @@ end screen gives you your score rather than declaring a winner.
 | ⚡ **Rapid Fire** | One team, sixty seconds, as many as they can get. Then the other team. |
 | ⛓️ **The Chain** | Every correct answer doubles the pot — 5, 10, 20, 40, 80… Bank it, or lose the lot on one wrong answer. |
 | 🎯 **Lock It In** | Four options, both teams lock an answer, the screen scores it. |
+| 🗺️ **Where in the World** | A country and its flag come up. Drop a pin on the map — the closer you land, the more it is worth. |
+| 🧭 **Street View** | You are standing somewhere on earth. Look around, work it out, drop a pin. Needs a free Google key — see below. |
 | 💰 **Final Wager** | Both teams bet points *before* seeing the question. Win the bet or lose it. |
 
 Every one of these runs with a host, without a host, or solo — Voice Battle
@@ -167,9 +274,45 @@ being the only one that needs two teams.
 
 
 Topics: **Anime · Minecraft · Terraria · Marvel · General Knowledge · Hit Songs
-(English, Japanese and Malay) · Malaysia**. Turn any of them on or off.
+(English, Japanese and Malay) · Malaysia · Film & TV · Video Games · Science &
+Nature · History & Myth · Geography · Sport**. Turn any of them on or off.
 
 ---
+
+## Every country
+
+`npm run content:world` builds two packs from open data:
+
+- **[mledoze/countries](https://github.com/mledoze/countries)** (ODbL) — the 194
+  UN member states with their capital, region, land neighbours, currency,
+  languages, area and a centre point. From these the game generates questions
+  about **every country**: capitals both ways round, which continent, which
+  currency, which language, and which of these countries borders it — with the
+  wrong options drawn from the same subregion, because "which of these is the
+  capital of Peru?" is no question at all when the other three are in Europe.
+- **[Natural Earth](https://www.naturalearthdata.com/)** via world-atlas (public
+  domain) — the country outlines for the map round.
+
+Flags are hotlinked from [flagcdn.com](https://flagcdn.com), which serves the
+public-domain flag images, and drive a "which country flies this flag?" picture
+round. That takes Geography from 298 questions to about 1,600.
+
+## Where the questions come from
+
+The hand-written banks in `src/content/questions/` are the ones that know about
+Terraria bosses and Malaysian food. Everything else is the
+**[Open Trivia Database](https://opentdb.com)** — about 5,000 human-verified
+multiple-choice questions across two dozen categories, free and with no API key,
+used here under **CC BY-SA 4.0**. They are merged rather than swapped in: the
+hand-written questions stay, OpenTDB is what stops a 50-question round running
+dry.
+
+To pull a fresh copy (about ten minutes — their rate limit is one request every
+five seconds):
+
+```bash
+npm run content:trivia
+```
 
 ## Where the music comes from
 
@@ -364,7 +507,9 @@ Around **4,000** playable items:
 
 | | |
 | --- | --- |
-| Written questions | 320 across 7 topics |
+| Written questions | ~5,500 across 13 topics |
+| Countries (facts, flags, map) | 194 UN member states |
+| Street View locations | 1,567 across 151 countries |
 | Voice Battle prompts | 89 characters to perform |
 | Anime characters | 400 |
 | Anime titles | 300 |

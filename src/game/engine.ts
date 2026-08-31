@@ -1,6 +1,6 @@
 import type { GameConfig, Question, RoundKind, RoundSpec, TeamId } from './types';
 import { ROUND_INFO, playingTeams } from './types';
-import { questionsFor } from './content';
+import { isCorrect, questionsFor, seededRng, type Rng } from './content';
 
 export type Phase =
   | 'round-intro'   // title card for the round
@@ -71,12 +71,32 @@ export type Action =
   | { type: 'rapid-mark'; correct: boolean }
   | { type: 'chain-bank' }
   | { type: 'voice-result'; team: TeamId | null }
+  | { type: 'geo-result'; points: Partial<Record<TeamId, number>> }
   | { type: 'vote'; team: TeamId }
   | { type: 'clear-votes' }
   | { type: 'skip-round' }
   | { type: 'end-game' };
 
 const OTHER = (t: TeamId): TeamId => (t === 'a' ? 'b' : 'a');
+
+/**
+ * Did this answer count?
+ *
+ * Typed answers go through the fuzzy matcher, which forgives spelling, spacing
+ * and word order — "shingeki" takes Attack on Titan. Multiple choice must not:
+ * the same matcher accepts "Naruto Shippuden" for an answer of "Naruto", so a
+ * distractor that contains the answer would score. On four fixed options the
+ * string is either the answer or it is not.
+ */
+export function answerAccepted(state: State, q: Question, pick: string | undefined): boolean {
+  if (!pick) return false;
+  return state.config.answerMode === 'typed' ? isCorrect(pick, q) : pick === q.answer;
+}
+
+/** Typing it out from nothing is harder than picking it off a list. */
+const TYPED_BONUS = 1.5;
+const awardFor = (state: State, points: number) =>
+  Math.round(points * (state.config.answerMode === 'typed' ? TYPED_BONUS : 1));
 
 /** The teams in this game — one of them in a solo run. */
 export const teamsIn = (state: State): TeamId[] => playingTeams(state.config);
@@ -100,6 +120,8 @@ export function turnTeam(state: State): TeamId | null {
 
 export function buildRounds(config: GameConfig): RoundSpec[] {
   const specs: RoundSpec[] = [];
+  // A daily run is the same for everybody who plays it that day.
+  const rng: Rng | undefined = config.dailySeed !== undefined ? seededRng(config.dailySeed) : undefined;
   for (const kind of config.rounds) {
     const info = ROUND_INFO[kind];
     // Rapid fire runs twice (once per team), so it needs a deeper pile.
@@ -107,7 +129,7 @@ export function buildRounds(config: GameConfig): RoundSpec[] {
       : kind === 'chain' ? config.questionsPerRound * 2
       : kind === 'wager' ? 1
       : config.questionsPerRound;
-    const questions = questionsFor(kind, config.categories, need, config.mimicSources);
+    const questions = questionsFor(kind, config.categories, need, config.mimicSources, rng);
     if (!questions.length) continue; // e.g. openings with no anime selected
     specs.push({ kind, title: info.title, blurb: info.blurb, points: info.points, seconds: info.seconds, questions });
   }
@@ -172,7 +194,7 @@ export function usesLockIn(state: State): boolean {
   if (!round) return false;
   // These two bring their own interface — a performance and a recording — and
   // there is nothing to pick from, host or not.
-  if (round.kind === 'voice' || round.kind === 'mimic') return false;
+  if (['voice', 'mimic', 'geo', 'street'].includes(round.kind)) return false;
   return !state.config.hosted || round.kind === 'mcq';
 }
 
@@ -307,6 +329,26 @@ export function reducer(state: State, action: Action): State {
         scoreFx: { ...state.scoreFx, [action.team]: state.scoreFx[action.team] + 1 },
         phase: 'revealed',
         fx: { kind: 'good', nonce: state.fx.nonce + 1 },
+      };
+    }
+
+    case 'geo-result': {
+      // The map round scores every team on its own merits — there is no single
+      // winner to award, just how close each one landed.
+      const scores = { ...state.scores };
+      const scoreFx = { ...state.scoreFx };
+      for (const team of teamsIn(state)) {
+        const gained = action.points[team] ?? 0;
+        scores[team] += gained;
+        if (gained > 0) scoreFx[team] += 1;
+      }
+      return {
+        ...state,
+        scores,
+        scoreFx,
+        phase: 'revealed',
+        running: false,
+        fx: { kind: Object.values(action.points).some((p) => (p ?? 0) > 0) ? 'good' : 'bad', nonce: state.fx.nonce + 1 },
       };
     }
 
@@ -496,7 +538,7 @@ function answerRapid(state: State, team: TeamId, choice: string): State {
   const round = currentRound(state);
   const q = currentQuestion(state);
   if (!round || !q) return state;
-  const correct = choice === q.answer;
+  const correct = answerAccepted(state, q, choice);
   const next = state.qIndex + 1;
   // Running out of questions ends the turn early — the pile is deep but finite.
   const exhausted = next >= round.questions.length;
@@ -513,7 +555,7 @@ function answerRapid(state: State, team: TeamId, choice: string): State {
   if (!correct) return base;
   return {
     ...base,
-    scores: { ...state.scores, [team]: state.scores[team] + round.points },
+    scores: { ...state.scores, [team]: state.scores[team] + awardFor(state, round.points) },
     rapidScored: { ...state.rapidScored, [team]: state.rapidScored[team] + 1 },
     scoreFx: { ...state.scoreFx, [team]: state.scoreFx[team] + 1 },
   };
@@ -526,7 +568,7 @@ function answerRapid(state: State, team: TeamId, choice: string): State {
 function answerChain(state: State, choice: string): State {
   const q = currentQuestion(state);
   if (!q) return state;
-  if (choice === q.answer) {
+  if (answerAccepted(state, q, choice)) {
     const streak = state.chainStreak + 1;
     return {
       ...state,
@@ -566,7 +608,7 @@ function scoreMcq(state: State): State {
     const wagerResult: Partial<Record<TeamId, boolean>> = { ...state.wagerResult };
     let anyRight = false;
     for (const team of teams) {
-      const correct = state.picks[team] === q.answer;
+      const correct = answerAccepted(state, q, state.picks[team]);
       wagerResult[team] = correct;
       if (correct) anyRight = true;
       scores[team] = Math.max(0, scores[team] + (correct ? state.wagers[team] : -state.wagers[team]));
@@ -588,17 +630,17 @@ function scoreMcq(state: State): State {
   let firstCorrect: TeamId | null = null;
 
   for (const team of teams) {
-    if (state.picks[team] !== q.answer) continue;
-    scores[team] += round.points;
+    if (!answerAccepted(state, q, state.picks[team])) continue;
+    scores[team] += awardFor(state, round.points);
     scoreFx[team] += 1;
     // Whoever locked the correct answer first takes a speed bonus.
-    if (!firstCorrect && state.pickOrder.find((t) => state.picks[t] === q.answer) === team) {
+    if (!firstCorrect && state.pickOrder.find((t) => answerAccepted(state, q, state.picks[t])) === team) {
       firstCorrect = team;
       scores[team] += 5;
     }
   }
 
-  const anyCorrect = teams.some((t) => state.picks[t] === q.answer);
+  const anyCorrect = teams.some((t) => answerAccepted(state, q, state.picks[t]));
   return {
     ...state,
     scores,

@@ -1,17 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Category, GameConfig, RoundKind, Team } from '@/game/types';
+import type { AnswerMode, Category, GameConfig, RoundKind, Team } from '@/game/types';
 import { CATEGORY_EMOJI, CATEGORY_LABEL, ROUND_INFO, SOLO_ROUNDS, TEAM_COLOURS } from '@/game/types';
-import { categorySize, clearMimicCache } from '@/game/content';
+import { categorySize, clearMimicCache, preloadQuestions, questionsReady } from '@/game/content';
 import { listClips } from '@/game/mimic-clips';
 import {
   ALL_MIMIC_SOURCES, MIMIC_SOURCE_INFO, setCustomRefs, sourceSize, type MimicSourceId,
 } from '@/game/mimic-refs';
 import { sfx } from '@/game/sfx';
+import { hasStreetView } from '@/game/maps';
 
-const ALL_CATEGORIES: Category[] = ['anime', 'minecraft', 'terraria', 'marvel', 'general', 'songs', 'malaysia'];
-const ALL_ROUNDS: RoundKind[] = ['buzz', 'reveal', 'opening', 'ending', 'mimic', 'voice', 'rapid', 'chain', 'mcq', 'wager'];
+const ALL_CATEGORIES: Category[] = [
+  'anime', 'minecraft', 'terraria', 'marvel', 'general', 'songs', 'malaysia',
+  'film', 'games', 'science', 'history', 'geography', 'sport',
+];
+const ALL_ROUNDS: RoundKind[] = ['buzz', 'reveal', 'opening', 'ending', 'mimic', 'voice', 'geo', 'street', 'rapid', 'chain', 'mcq', 'wager'];
 
 export default function Setup({ onStart, onBack, onStudio, solo = false }: {
   onStart: (c: GameConfig) => void;
@@ -30,6 +34,10 @@ export default function Setup({ onStart, onBack, onStudio, solo = false }: {
   const [rounds, setRounds] = useState<RoundKind[]>(['buzz', 'reveal', 'opening', 'rapid', 'chain', 'wager']);
   const [perRound, setPerRound] = useState(5);
   const [mimicSources, setMimicSources] = useState<MimicSourceId[]>(['synth', 'anime', 'marvel', 'movie']);
+  const [answerMode, setAnswerMode] = useState<AnswerMode>('choices');
+  // The question bank is a separate chunk; fetch it while topics are picked.
+  const [banksIn, setBanksIn] = useState(questionsReady());
+  useEffect(() => { void preloadQuestions().then(() => setBanksIn(true)); }, []);
   // Bumped when the saved clips are re-read, so the counts below refresh.
   const [clipTick, setClipTick] = useState(0);
 
@@ -50,6 +58,7 @@ export default function Setup({ onStart, onBack, onStudio, solo = false }: {
     () => Object.fromEntries(ALL_CATEGORIES.map((c) => [c, categorySize(c)])) as Record<Category, number>,
     [],
   );
+  void banksIn; // the counts come from the manifest, but re-render when it lands
 
   const mimicSizes = useMemo(
     () => Object.fromEntries(ALL_MIMIC_SOURCES.map((s) => [s, sourceSize(s)])) as Record<MimicSourceId, number>,
@@ -69,12 +78,16 @@ export default function Setup({ onStart, onBack, onStudio, solo = false }: {
   // Every round scores itself now, so the only filter left is solo: Voice
   // Battle is two teams performing and the room voting between them, which does
   // not reduce to one player.
-  const allowed = (r: RoundKind) => (solo ? SOLO_ROUNDS.includes(r) : true);
+  const allowed = (r: RoundKind) => {
+    // Street View needs a Google Maps key; without one it would be a blank box.
+    if (r === 'street' && !hasStreetView()) return false;
+    return solo ? SOLO_ROUNDS.includes(r) : true;
+  };
   const effectiveRounds = rounds.filter(allowed);
   // Picking Mimic with nothing to mimic would build an empty round.
   const mimicReady = !mimicOn || mimicTotal > 0;
   const ready = categories.length > 0 && effectiveRounds.length > 0 && nameA.trim()
-    && (solo || nameB.trim()) && mimicReady;
+    && (solo || nameB.trim()) && mimicReady && banksIn;
 
   const start = () => {
     if (!ready) return;
@@ -86,7 +99,7 @@ export default function Setup({ onStart, onBack, onStudio, solo = false }: {
       { id: 'b', name: nameB.trim() || 'Team B', colour: colourB, score: 0 },
     ];
     const chosen = effectiveRounds.length ? effectiveRounds : (['mcq'] as RoundKind[]);
-    onStart({ teams, categories, rounds: chosen, hosted, solo, questionsPerRound: perRound, mimicSources });
+    onStart({ teams, categories, rounds: chosen, hosted, solo, answerMode, questionsPerRound: perRound, mimicSources });
   };
 
   return (
@@ -195,6 +208,15 @@ export default function Setup({ onStart, onBack, onStudio, solo = false }: {
                     <span>
                       <strong style={{ display: 'block' }}>{info.title}</strong>
                       <span className="muted" style={{ fontSize: '0.82em', fontWeight: 400 }}>{info.blurb}</span>
+                      {/* A greyed-out card with no reason given is just baffling —
+                          say what is missing and where to fix it. */}
+                      {!usable && (
+                        <span className="round-why">
+                          {r === 'street'
+                            ? 'Needs a Google Maps key with the Maps Embed API enabled — see .env.example'
+                            : 'Needs two teams, so it sits out a solo run'}
+                        </span>
+                      )}
                     </span>
                   </button>
                 );
@@ -239,6 +261,24 @@ export default function Setup({ onStart, onBack, onStudio, solo = false }: {
             </section>
           )}
 
+          {/* ------------------------------------------------ answer mode */}
+          <section className="panel panel-lg" style={{ padding: 24 }}>
+            <p className="label" style={{ marginBottom: 14 }}>How answers are given</p>
+            <div className="seg" role="group">
+              <button data-on={answerMode === 'choices'} onClick={() => { sfx.select(); setAnswerMode('choices'); }}>
+                🔘 Four options
+              </button>
+              <button data-on={answerMode === 'typed'} onClick={() => { sfx.select(); setAnswerMode('typed'); }}>
+                ⌨️ Type it out
+              </button>
+            </div>
+            <p className="muted" style={{ marginTop: 14, fontSize: '0.9em', maxWidth: '62ch' }}>
+              {answerMode === 'choices'
+                ? 'Tap or key one of four. Friendly, fast, and everyone can join in.'
+                : 'No options — produce the answer from nothing, for half as many points again. Spelling, spacing and word order are forgiven, so “shingeki” takes Attack on Titan. Best on your own or online, where each person answers on their own screen.'}
+            </p>
+          </section>
+
           {/* ------------------------------------------------ length */}
           <section className="panel panel-lg" style={{ padding: 24 }}>
             <p className="label" style={{ marginBottom: 14 }}>Questions per round</p>
@@ -258,9 +298,11 @@ export default function Setup({ onStart, onBack, onStudio, solo = false }: {
           </button>
           {!ready && (
             <p className="muted" style={{ textAlign: 'center', fontSize: '0.88em' }}>
-              {!mimicReady
-                ? 'The Mimic round needs at least one sound source.'
-                : 'Pick at least one topic and one round to continue.'}
+              {!banksIn
+                ? 'Fetching the question bank…'
+                : !mimicReady
+                  ? 'The Mimic round needs at least one sound source.'
+                  : 'Pick at least one topic and one round to continue.'}
             </p>
           )}
         </div>

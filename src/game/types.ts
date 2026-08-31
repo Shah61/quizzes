@@ -2,7 +2,10 @@ import type { MimicSourceId } from './mimic-refs';
 
 export type Category =
   | 'anime' | 'minecraft' | 'terraria' | 'marvel'
-  | 'general' | 'songs' | 'malaysia';
+  | 'general' | 'songs' | 'malaysia'
+  // Added with the Open Trivia Database bank, which is deep enough in each of
+  // these to stand as its own topic rather than being folded into general.
+  | 'film' | 'games' | 'science' | 'history' | 'geography' | 'sport';
 
 export type RoundKind =
   | 'buzz'      // host reads a question, teams race to buzz
@@ -14,6 +17,8 @@ export type RoundKind =
   | 'rapid'     // one team, 60 seconds, as many as possible
   | 'chain'     // Weakest Link: build a streak, bank it or lose it
   | 'wager'     // final round, teams bet their points
+  | 'geo'       // drop a pin on the world map, scored by how close you got
+  | 'street'    // dropped into a panorama somewhere on earth — where are you?
   | 'mcq';      // multiple choice, both teams lock in — scores itself
 
 export type TeamId = 'a' | 'b';
@@ -48,6 +53,12 @@ export interface Question {
   voice?: { character: string; from: string; direction: string };
   /** Mimic only: which sound recipe to copy. */
   mimicId?: string;
+  /** Map round only: the place being looked for. */
+  geo?: {
+    lat: number; lng: number; name: string; flag?: string; capital?: string;
+    /** Street View round: show the panorama and keep the name back until the reveal. */
+    pano?: boolean; heading?: number; country?: string;
+  };
   /** 1 = everyone knows it, 3 = deep cut. */
   difficulty: 1 | 2 | 3;
 }
@@ -63,6 +74,16 @@ export interface RoundSpec {
   questions: Question[];
 }
 
+/**
+ * How answers are given on the self-scoring rounds.
+ *
+ * Four options is the friendly default. Typing it out is what the anime-music
+ * crowd actually asks for — recognising a title from a list is a much smaller
+ * feat than producing it from nothing — and the fuzzy matcher in content.ts
+ * already forgives spelling, spacing and word order.
+ */
+export type AnswerMode = 'choices' | 'typed';
+
 export interface GameConfig {
   teams: [Team, Team];
   categories: Category[];
@@ -70,6 +91,10 @@ export interface GameConfig {
   hosted: boolean;
   /** One player against the questions — team B is not in the game at all. */
   solo: boolean;
+  /** Tap one of four, or type it out for more points. */
+  answerMode: AnswerMode;
+  /** Set for the Daily Challenge: fixes the question set for the whole day. */
+  dailySeed?: number;
   questionsPerRound: number;
   /** Which pools the Mimic round draws its references from. */
   mimicSources: MimicSourceId[];
@@ -84,7 +109,7 @@ export const playingTeams = (config: Pick<GameConfig, 'solo'>): TeamId[] =>
  * between them, so there is nothing to run solo. Everything else works alone —
  * Mimic included, because that one is scored by the machine rather than a vote.
  */
-export const SOLO_ROUNDS: RoundKind[] = ['buzz', 'reveal', 'opening', 'ending', 'mimic', 'rapid', 'chain', 'mcq', 'wager'];
+export const SOLO_ROUNDS: RoundKind[] = ['buzz', 'reveal', 'opening', 'ending', 'mimic', 'rapid', 'chain', 'mcq', 'wager', 'geo', 'street'];
 
 export const CATEGORY_LABEL: Record<Category, string> = {
   anime: 'Anime',
@@ -94,11 +119,18 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   general: 'General Knowledge',
   songs: 'Hit Songs',
   malaysia: 'Malaysia',
+  film: 'Film & TV',
+  games: 'Video Games',
+  science: 'Science & Nature',
+  history: 'History & Myth',
+  geography: 'Geography',
+  sport: 'Sport',
 };
 
 export const CATEGORY_EMOJI: Record<Category, string> = {
   anime: '⛩️', minecraft: '⛏️', terraria: '🌳', marvel: '🦸',
   general: '🧠', songs: '🎵', malaysia: '🇲🇾',
+  film: '🎬', games: '🎮', science: '🔬', history: '🏛️', geography: '🌍', sport: '⚽',
 };
 
 export const ROUND_INFO: Record<RoundKind, { title: string; blurb: string; emoji: string; points: number; seconds?: number }> = {
@@ -111,6 +143,8 @@ export const ROUND_INFO: Record<RoundKind, { title: string; blurb: string; emoji
   rapid:   { title: 'Rapid Fire',     blurb: 'One team, sixty seconds, as many correct answers as possible.',                     emoji: '⚡', points: 5,  seconds: 60 },
   chain:   { title: 'The Chain',      blurb: 'Every correct answer doubles the pot. Bank it, or risk losing the lot.',            emoji: '⛓️', points: 5 },
   wager:   { title: 'Final Wager',    blurb: 'Both teams bet points before the question. Win it or lose it.',                     emoji: '💰', points: 0 },
+  geo:     { title: 'Where in the World', blurb: 'Drop a pin on the map. The closer you land, the more it is worth.',            emoji: '🗺️', points: 100, seconds: 30 },
+  street:  { title: 'Street View',        blurb: 'You are standing somewhere on earth. Look around, then drop a pin.',          emoji: '🧭', points: 100, seconds: 60 },
   mcq:     { title: 'Lock It In',     blurb: 'Four options. Both teams lock an answer — the screen scores it.',                   emoji: '🎯', points: 10, seconds: 20 },
 };
 

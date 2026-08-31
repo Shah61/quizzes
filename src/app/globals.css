@@ -473,6 +473,217 @@ img { display: block; max-width: 100%; }
 
 .audio-queue { font-size: 0.78em; margin-top: 8px; text-align: center; }
 
+/* ==================================================== WHERE IN THE WORLD */
+
+.round-why {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.76em;
+  font-weight: 600;
+  color: var(--gold);
+  opacity: 0.85;
+}
+
+.geo-brief { text-align: center; }
+
+/* The panorama is the round, so give it the screen rather than a letterbox
+   with the map pushed below the fold. */
+.geo-stage { position: relative; width: 100%; }
+
+.street-view {
+  width: 100%;
+  height: min(66vh, 620px);
+  border-radius: var(--r);
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  background: #000;
+}
+
+/* The map lives over the panorama and grows when reached for — the GeoGuessr
+   arrangement, and the only one where you can look and place a pin at once. */
+.geo-inset {
+  position: absolute;
+  right: 14px;
+  /* Clear of the strip along the foot of the embed: the Google wordmark and the
+     Terms links live there, and covering those is the one thing the Maps terms
+     genuinely forbid. Masking the address card is fine; sitting on the
+     attribution is not. */
+  bottom: 34px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  width: clamp(230px, 26vw, 330px);
+  transition: width 0.18s ease;
+}
+.geo-inset[data-open='true'] { width: min(86vw, 680px); }
+
+.geo-inset-toggle {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: rgba(10, 10, 20, 0.9);
+  backdrop-filter: blur(8px);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.84em;
+  font-weight: 700;
+  cursor: pointer;
+}
+.geo-inset-toggle:hover { border-color: var(--accent); }
+
+.geo-inset-body {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border-radius: var(--r);
+  border: 1px solid var(--line-2);
+  background: rgba(10, 10, 20, 0.94);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+}
+.geo-inset[data-open='true'] .geo-inset-body { display: flex; }
+/* Inside the inset the map fills the panel rather than its own fixed width. */
+.geo-inset-body .world-map { width: 100%; }
+
+.geo-inset-actions { display: flex; flex-direction: column; gap: 8px; }
+.geo-confirm { width: 100%; }
+
+.geo-turn {
+  margin: 0;
+  font-size: 0.82em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c, var(--muted));
+  text-align: center;
+}
+
+.geo-corner-actions {
+  position: absolute;
+  left: 14px;
+  bottom: 34px;
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+@media (max-width: 720px) {
+  .geo-corner-actions { position: static; margin-top: 10px; }
+}
+
+.geo-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+}
+.geo-reveal-map { width: min(94vw, 760px); }
+.geo-reveal-map .world-map { width: 100%; }
+
+/* On a phone there is no room to float the map over the picture, so it goes
+   back to sitting underneath — but the panorama shrinks to leave room for it. */
+@media (max-width: 720px) {
+  .street-view { height: 40vh; }
+  .geo-inset {
+    position: static;
+    width: 100%;
+    align-items: stretch;
+    margin-top: 12px;
+  }
+  .geo-inset[data-open='true'] { width: 100%; }
+  .geo-giveup { position: static; margin-top: 10px; }
+}
+.street-view { position: relative; }
+.street-view iframe { display: block; width: 100%; height: 100%; border: 0; }
+
+/* Covers only the address card in the top-left. Sized to that card and nothing
+   more — the Google wordmark and Terms links along the bottom stay visible. */
+.street-view-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: clamp(180px, 24%, 300px);
+  height: 58px;
+  border-bottom-right-radius: var(--r);
+  background: var(--bg);
+  z-index: 2;
+}
+.street-view-failed { display: grid; place-items: center; padding: 20px; text-align: center; }
+.geo-name { font-size: clamp(1.7rem, 5vw, 2.8rem); color: var(--accent-2); }
+.geo-flag {
+  width: 54px; height: auto;
+  border-radius: 4px;
+  border: 1px solid var(--line-2);
+}
+
+.world-map {
+  display: block;
+  width: min(94vw, 900px);
+  /* Must be stated, not left to the viewBox: as a grid item with height:auto
+     the SVG collapsed to a couple of pixels, and every click then mapped to
+     nonsense coordinates. 2:1 matches the equirectangular viewBox. */
+  aspect-ratio: 2 / 1;
+  height: auto;
+  flex: none;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  /* The click target is the whole map, so say so. */
+  cursor: default;
+  touch-action: manipulation;
+}
+.world-map[data-live='true'] { cursor: crosshair; }
+.world-map[data-live='true']:hover { border-color: var(--accent); }
+.world-map-loading {
+  display: grid; place-items: center;
+  width: min(94vw, 900px); aspect-ratio: 2 / 1;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.world-sea  { fill: rgba(34, 211, 238, 0.07); }
+.world-land path {
+  fill: rgba(255, 255, 255, 0.16);
+  stroke: rgba(255, 255, 255, 0.30);
+  stroke-width: 0.5;
+  /* Without this every island swallows the click meant for the map. */
+  pointer-events: none;
+}
+.world-pin-label { font-size: 13px; font-weight: 700; paint-order: stroke; stroke: rgba(0,0,0,0.75); stroke-width: 3px; }
+
+.geo-results { display: flex; flex-direction: column; gap: 8px; width: min(92vw, 560px); }
+.geo-result {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--r);
+  border: 1px solid var(--c);
+  background: rgba(255, 255, 255, 0.05);
+}
+.geo-result-team  { font-weight: 700; color: var(--c); }
+.geo-result-km    { font-size: 0.9em; }
+.geo-result-note  { font-size: 0.78em; }
+.geo-result-score { font-size: 1.3rem; color: var(--good); }
+
+@media (max-width: 520px) {
+  .geo-result { grid-template-columns: 1fr auto; row-gap: 4px; }
+  .geo-result-note { grid-column: 1 / -1; }
+}
+
+.typed-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(92vw, 520px);
+  text-align: left;
+}
+
 .audio-stage {
   width: min(92vw, 620px);
   padding: 30px;

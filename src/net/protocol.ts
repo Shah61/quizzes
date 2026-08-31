@@ -80,6 +80,8 @@ export interface Snapshot {
   canVote: boolean;
   votes: Record<TeamId, number>;
   hosted: boolean;
+  /** Four options, or type it out. */
+  answerMode: 'choices' | 'typed';
 
   chainPot: number;
   activeTeam: TeamId | null;

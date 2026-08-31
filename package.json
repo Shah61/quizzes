@@ -9,7 +9,10 @@
     "content": "node scripts/build-content.mjs",
     "content:scenes": "node scripts/build-scenes.mjs",
     "content:opening-audio": "node scripts/build-opening-audio.mjs",
-    "test": "node scripts/test-mimic-dsp.mjs"
+    "test": "node scripts/test-mimic-dsp.mjs",
+    "content:trivia": "node scripts/build-trivia.mjs",
+    "content:world": "node scripts/build-world.mjs",
+    "content:places": "node scripts/build-places.mjs"
   },
   "dependencies": {
     "next": "^15.5.24",

@@ -7,6 +7,7 @@ import {
   buildRounds, currentQuestion, currentRound, initialState, pointsFor, reducer, turnTeam, usesLockIn, winnerOf, CHAIN_LADDER,
 } from '@/game/engine';
 import { playingTeams } from '@/game/types';
+import { recordDaily, type DailyRecord } from '@/game/daily';
 import { sfx } from '@/game/sfx';
 import {
   BuzzBanner, Confetti, OpeningPlayer, PRELOAD_AHEAD, RevealImage, ScoreNumber, TimerBar, TimerRing, Toast, Verdict,
@@ -14,6 +15,7 @@ import {
 import OnlineRoom from './OnlineRoom';
 import VoiceRound from './VoiceRound';
 import MimicRound from './MimicRound';
+import GeoRound from './GeoRound';
 import { findRef } from '@/game/mimic-refs';
 import type { Sabotage } from '@/game/mimic-audio';
 import type { Snapshot } from '@/net/protocol';
@@ -29,6 +31,9 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
   const [confetti, setConfetti] = useState(0);
   // Aimed by the wheel at the end of one Mimic question, applied to the next.
   const [sabotages, setSabotages] = useState<Partial<Record<TeamId, Sabotage>>>({});
+  // Typed-answer mode: what the team at the keyboard has entered so far.
+  const [typed, setTyped] = useState('');
+  const [daily, setDaily] = useState<DailyRecord | null>(null);
 
   const round = currentRound(state);
   const q = currentQuestion(state);
@@ -80,7 +85,12 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
   useEffect(() => { if (bannerNonce) sfx.buzz(); }, [bannerNonce]);
 
   useEffect(() => {
-    if (state.phase === 'game-end') { sfx.fanfare(); setConfetti((n) => n + 1); }
+    if (state.phase !== 'game-end') return;
+    sfx.fanfare();
+    setConfetti((n) => n + 1);
+    // A daily run is the only one that leaves anything behind.
+    if (config.dailySeed !== undefined) setDaily(recordDaily(state.scores.a));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.phase]);
 
   // No host means no "Next" button in a control bar — advance on a timer so the
@@ -95,6 +105,8 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
   }, [config.hosted, round?.kind, state.phase, state.qIndex, state.roundIndex]);
 
   /* --------------------------------------------------------- shortcuts */
+
+  useEffect(() => { setTyped(''); }, [state.qIndex, state.roundIndex, state.phase]);
 
   const buzz = useCallback((team: TeamId) => dispatch({ type: 'buzz', team }), []);
 
@@ -208,6 +220,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
     canVote: round?.kind === 'voice' && state.phase === 'question',
     votes: state.votes,
     hosted: config.hosted,
+    answerMode: config.answerMode,
     chainPot: state.chainPot,
     activeTeam: round?.kind === 'rapid' ? state.rapidTeam : round?.kind === 'chain' ? state.chainTeam : null,
     winner: state.phase === 'game-end' ? winnerOf(state) : null,
@@ -323,6 +336,13 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
         <h1 className="winner-name display" style={{ ['--c' as string]: champ?.colour ?? '#fff' }}>
           {config.solo ? `${state.scores.a} points` : champ ? `${champ.name} wins` : "It's a tie"}
         </h1>
+        {daily && (
+          <div className="row gap wrap-w" style={{ justifyContent: 'center' }}>
+            <span className="category-badge">🔥 {daily.streak} day streak</span>
+            <span className="category-badge">Best {daily.bestScore}</span>
+            <span className="category-badge">{daily.played} day{daily.played === 1 ? '' : 's'} played</span>
+          </div>
+        )}
         <div className="final-scores">
           {teams.map((id) => (
             <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour }}>
@@ -438,6 +458,23 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
         )}
       </div>
     );
+  } else if (q && (round?.kind === 'geo' || round?.kind === 'street') && state.phase === 'question') {
+    stage = (
+      <div className="stage wrap">
+        <span className="category-badge">
+          {ROUND_INFO[round.kind].emoji} {ROUND_INFO[round.kind].title} · {state.qIndex + 1}/{round.questions.length}
+        </span>
+        <GeoRound
+          key={q.id}
+          question={q}
+          teams={teams}
+          teamNames={{ a: teamOf('a').name, b: teamOf('b').name }}
+          teamColours={{ a: teamOf('a').colour, b: teamOf('b').colour }}
+          points={round.points}
+          onFinish={(pts) => dispatch({ type: 'geo-result', points: pts })}
+        />
+      </div>
+    );
   } else if (q && round?.kind === 'voice' && state.phase === 'question') {
     stage = (
       <div className="stage wrap">
@@ -500,8 +537,48 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
           </div>
         )}
 
+        {/* Type it out — harder, and worth more. */}
+        {showChoices && config.answerMode === 'typed' && !revealed && (() => {
+          // Whoever is up: the team whose turn it is, or the next one still to answer.
+          const entering = turn ?? teams.find((t) => !state.picks[t]) ?? null;
+          if (!entering) return <p className="muted">Both answers are in…</p>;
+          return (
+            <form
+              className="typed-answer"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const value = typed.trim();
+                if (!value) return;
+                sfx.select();
+                dispatch({ type: 'lock', team: entering, choice: value });
+                setTyped('');
+              }}
+            >
+              <label className="label" style={{ color: teamOf(entering).colour }}>
+                {config.solo ? 'Your answer' : `${teamOf(entering).name} — type it`}
+              </label>
+              <div className="row gap-sm">
+                <input
+                  className="input grow"
+                  value={typed}
+                  autoFocus
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="Type the answer…"
+                  onChange={(e) => setTyped(e.target.value)}
+                  style={{ borderColor: teamOf(entering).colour }}
+                />
+                <button className="btn btn-primary" type="submit" disabled={!typed.trim()}>Enter</button>
+              </div>
+              <p className="dim" style={{ fontSize: '0.8em' }}>
+                Spelling is forgiven — close enough counts.
+              </p>
+            </form>
+          );
+        })()}
+
         {/* Multiple choice grid — the whole interface in no-host mode. */}
-        {showChoices && (
+        {showChoices && config.answerMode === 'choices' && (
           <div className="choices">
             {q.choices.map((choice, i) => {
               // Only after the reveal. Showing this live put a chip with the
@@ -541,6 +618,16 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {config.answerMode === 'typed' && revealed && (
+          <div className="row gap-sm wrap-w" style={{ justifyContent: 'center' }}>
+            {teams.map((t) => state.picks[t] && (
+              <span key={t} className="pick-chip" style={{ ['--c' as string]: teamOf(t).colour }}>
+                {teamOf(t).name}: {state.picks[t]}
+              </span>
+            ))}
           </div>
         )}
 

@@ -8,6 +8,8 @@ import Arena from '@/components/Arena';
 import Japanese from '@/components/Japanese';
 import ClipStudio from '@/components/ClipStudio';
 import VolumeControl from '@/components/VolumeControl';
+import { dailyConfig } from '@/game/daily';
+import { preloadQuestions } from '@/game/content';
 
 type View = 'menu' | 'setup' | 'solo-setup' | 'arena' | 'japanese' | 'studio';
 
@@ -19,7 +21,10 @@ export default function Page() {
     view === 'japanese' ? <Japanese onExit={() => setView('menu')} />
     : view === 'studio' ? <ClipStudio onBack={() => setView('setup')} />
     : view === 'arena' && config ? (
-      <Arena config={config} onExit={() => setView(config.solo ? 'solo-setup' : 'setup')} />
+      <Arena
+        config={config}
+        onExit={() => setView(config.dailySeed !== undefined ? 'menu' : config.solo ? 'solo-setup' : 'setup')}
+      />
     )
     : view === 'setup' || view === 'solo-setup' ? (
       <Setup
@@ -34,6 +39,10 @@ export default function Page() {
       <Menu
         onArena={() => setView('setup')}
         onSolo={() => setView('solo-setup')}
+        onDaily={() => {
+          // Straight into a game from the menu, so the bank has to be here first.
+          void preloadQuestions().then(() => { setConfig(dailyConfig('You')); setView('arena'); });
+        }}
         onJapanese={() => setView('japanese')}
       />
     );

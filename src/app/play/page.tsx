@@ -13,6 +13,7 @@ function PlayScreen() {
   const [name, setName] = useState('');
   const [team, setTeam] = useState<TeamId>('a');
   const [myPick, setMyPick] = useState<string | null>(null);
+  const [myTyped, setMyTyped] = useState('');
   const [myVote, setMyVote] = useState<TeamId | null>(null);
 
   // A room code can be shared as a link: /play?room=ABCD
@@ -22,7 +23,7 @@ function PlayScreen() {
   }, []);
 
   // Clear the local pick whenever a new question comes round.
-  useEffect(() => { setMyPick(null); setMyVote(null); }, [snapshot?.qIndex, snapshot?.roundIndex]);
+  useEffect(() => { setMyPick(null); setMyTyped(''); setMyVote(null); }, [snapshot?.qIndex, snapshot?.roundIndex]);
 
   const teamName = (id: TeamId) => snapshot?.teamNames[id] ?? brand?.names[id] ?? (id === 'a' ? 'Team A' : 'Team B');
   const teamColour = (id: TeamId) => snapshot?.teamColours[id] ?? brand?.colours[id] ?? (id === 'a' ? '#3b82f6' : '#ef4444');
@@ -224,8 +225,40 @@ function PlayScreen() {
           </div>
         )}
 
+        {/* Typed mode: your own keyboard, nobody else sees it. */}
+        {s.lockRound && s.answerMode === 'typed' && !revealed && (
+          <form
+            className="typed-answer"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const value = myTyped.trim();
+              if (!value || teamPick) return;
+              sfx.select();
+              setMyPick(value);
+              send({ type: 'lock', choice: value });
+            }}
+          >
+            <div className="row gap-sm">
+              <input
+                className="input grow"
+                value={myTyped}
+                autoComplete="off"
+                spellCheck={false}
+                disabled={Boolean(teamPick) || !s.canLock}
+                placeholder="Type the answer…"
+                onChange={(e) => setMyTyped(e.target.value)}
+                style={{ borderColor: myColour }}
+              />
+              <button className="btn btn-primary" type="submit" disabled={!myTyped.trim() || Boolean(teamPick)}>
+                Enter
+              </button>
+            </div>
+            <p className="dim" style={{ fontSize: '0.8em' }}>Close enough counts — spelling is forgiven.</p>
+          </form>
+        )}
+
         {/* Lock-in rounds: the four options, tappable. */}
-        {s.lockRound && s.choices.length > 0 && (
+        {s.lockRound && s.answerMode === 'choices' && s.choices.length > 0 && (
           <div className="choices">
             {s.choices.map((choice, i) => {
               const stateAttr = revealed
