@@ -50,7 +50,7 @@ export function BuzzBanner({ name, colour, nonce }: { name: string; colour: stri
   return (
     <>
       <div className="buzz-flash" style={{ ['--c' as string]: colour }} />
-      <div className="buzz-banner display" style={{ ['--c' as string]: colour }}>{name}</div>
+      <div className="buzz-banner" style={{ ['--c' as string]: colour }}>{name}</div>
     </>
   );
 }
@@ -66,7 +66,7 @@ export function Verdict({ kind, nonce }: { kind: 'good' | 'bad' | null; nonce: n
   if (!show || !kind) return null;
   return (
     <div className="verdict" data-kind={kind}>
-      <div className="verdict-mark display">{kind === 'good' ? '✓' : '✗'}</div>
+      <div className="verdict-mark">{kind === 'good' ? '✓' : '✗'}</div>
     </div>
   );
 }
@@ -125,7 +125,7 @@ export function RevealImage({
   const hidden = mode !== 'none' && p < 1;
   const style =
     mode === 'blur'
-      ? ({ ['--blur' as string]: `${(1 - p) * 30}px`, ['--zoom' as string]: `${1 + (1 - p) * 0.5}` })
+      ? ({ ['--blur-px' as string]: `${(1 - p) * 30}px`, ['--zoom' as string]: `${1 + (1 - p) * 0.5}` })
       : undefined;
 
   return (
@@ -303,9 +303,9 @@ export function OpeningPlayer({
       </div>
       <div className="audio-progress"><i style={{ width: `${progress * 100}%` }} /></div>
       {warm > 0 && (
-        <p className="dim audio-queue">{warm} more track{warm === 1 ? '' : 's'} ready to go</p>
+        <p className="audio-queue">{warm} more track{warm === 1 ? '' : 's'} ready to go</p>
       )}
-      <p className="muted" style={{ marginTop: 14, fontSize: '0.88em' }}>
+      <p className="audio-note">
         {failed
           ? 'This track would not load — skip to the next one.'
           : playing ? 'Listening…' : 'Paused'}

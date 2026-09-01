@@ -7,6 +7,7 @@ import {
 import { TEAM_COLOURS } from '@/game/types';
 import { primeAudio, sfx } from '@/game/sfx';
 import { Confetti, TimerBar, Verdict } from './bits';
+import { Cta, Hud, Rail, Screen, Wordmark, type RailItem } from './Shell';
 
 type Phase = 'setup' | 'play' | 'done';
 type PlayerId = 0 | 1;
@@ -15,6 +16,16 @@ const ALL_LEVELS: JLevel[] = ['n5', 'n4', 'n3', 'n2', 'n1'];
 const ALL_MODES: JMode[] = ['jp-en', 'en-jp', 'reading', 'kana', 'type'];
 const KEYS: Record<PlayerId, string[]> = { 0: ['1', '2', '3', '4'], 1: ['7', '8', '9', '0'] };
 const SECONDS = 20;
+
+/** The duel runs on its own colours — indigo and a hot pink second light. */
+const JP_THEME: React.CSSProperties = {
+  ['--accent' as string]: '#f472b6',
+  ['--accent-2' as string]: '#818cf8',
+  ['--on-accent' as string]: '#3a0620',
+  ['--wash-1' as string]: 'rgba(244, 114, 182, 0.36)',
+  ['--wash-2' as string]: 'rgba(129, 140, 248, 0.26)',
+  ['--wash-3' as string]: 'rgba(22, 10, 34, 0.80)',
+};
 
 export default function Japanese({ onExit }: { onExit: () => void }) {
   const [phase, setPhase] = useState<Phase>('setup');
@@ -152,95 +163,113 @@ export default function Japanese({ onExit }: { onExit: () => void }) {
     set((list) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]));
   };
 
+  const rails: RailItem[] = [
+    { key: 'exit', icon: phase === 'play' ? 'close' : 'back', label: phase === 'play' ? 'Quit the duel' : 'Back to the menu', onGo: onExit },
+    { key: 'jp', icon: '語', label: 'Japanese duel' },
+  ];
+
+  const mark = phase === 'done' ? '勝' : phase === 'play' && q?.mode === 'kana' ? 'あ' : '語';
+
   /* --------------------------------------------------------- setup */
 
   if (phase === 'setup') {
     return (
-      <div className="jp">
-        <div className="jp-mark" aria-hidden>語</div>
-        <div className="wrap">
-          <div className="topbar">
-            <button className="btn btn-ghost btn-sm" onClick={onExit}>← Back</button>
-            <h2 className="display" style={{ fontSize: '1.5rem' }}>Japanese Quiz</h2>
+      <Screen theme={JP_THEME}>
+        <div className="jp-mark" aria-hidden>{mark}</div>
+        <Hud>
+          <Wordmark jp="日本語デュエル" en="Japanese duel" />
+          <div className="hud-right">
+            <span className="hud-pill">{pool.length.toLocaleString()} words</span>
           </div>
+        </Hud>
+        <Rail items={rails} active="jp" />
 
-          <div className="setup-grid" style={{ paddingTop: 22 }}>
-            <section className="panel panel-lg" style={{ padding: 24 }}>
-              <p className="label" style={{ marginBottom: 16 }}>Two players, one screen</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 22 }}>
-                {[0, 1].map((i) => (
-                  <div key={i} className="field">
-                    <span className="label">
-                      Player {i + 1} · keys {KEYS[i as PlayerId][0]}–{KEYS[i as PlayerId][3]}
-                    </span>
-                    <input
-                      className="input"
-                      value={names[i]}
-                      maxLength={20}
-                      onChange={(e) => setNames((n) => { const c = [...n]; c[i] = e.target.value; return c; })}
-                      style={{ borderColor: colours[i], fontWeight: 700 }}
-                    />
-                    <div className="swatches">
-                      {TEAM_COLOURS.map((c) => (
-                        <button key={c} className="swatch" style={{ background: c }} data-on={colours[i] === c}
-                          aria-label={c}
-                          onClick={() => { sfx.select(); setColours((p) => { const n = [...p]; n[i] = c; return n; }); }} />
-                      ))}
+        <div className="screen-main">
+          <div className="sheet">
+            <div className="sheet-head">
+              <h1 className="sheet-title">Japanese duel</h1>
+              <p className="sheet-lede">Two players, one screen, one keyboard. First correct answer takes the point.</p>
+            </div>
+
+            <div className="sheet-body">
+              <section className="card panel">
+                <div className="card-head"><p className="label">Two players, one screen</p></div>
+                <div className="grid-auto">
+                  {[0, 1].map((i) => (
+                    <div key={i} className="field">
+                      <span className="label">
+                        Player {i + 1} · keys {KEYS[i as PlayerId][0]}–{KEYS[i as PlayerId][3]}
+                      </span>
+                      <input
+                        className="input"
+                        value={names[i]}
+                        maxLength={20}
+                        onChange={(e) => setNames((n) => { const c = [...n]; c[i] = e.target.value; return c; })}
+                        style={{ borderColor: colours[i], fontWeight: 700 }}
+                      />
+                      <div className="swatches">
+                        {TEAM_COLOURS.map((c) => (
+                          <button key={c} className="swatch" style={{ background: c }} data-on={colours[i] === c}
+                            aria-label={c}
+                            onClick={() => { sfx.select(); setColours((p) => { const n = [...p]; n[i] = c; return n; }); }} />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+                  ))}
+                </div>
+              </section>
 
-            <section className="panel panel-lg" style={{ padding: 24 }}>
-              <p className="label" style={{ marginBottom: 14 }}>JLPT levels</p>
-              <div className="row wrap-w gap-sm">
-                {ALL_LEVELS.map((l) => (
-                  <button key={l} className="chip" data-on={levels.includes(l)} onClick={() => toggle(l, setLevels)}>
-                    <span className="jp-level" data-lv={l} style={{ border: 'none', background: 'none', padding: 0 }}>
-                      {l.toUpperCase()}
-                    </span>
-                    <span>{LEVEL_INFO[l]}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="muted" style={{ marginTop: 12, fontSize: '0.88em' }}>
-                {pool.length.toLocaleString()} words in the selected range.
-              </p>
-            </section>
+              <section className="card panel">
+                <div className="card-head"><p className="label">JLPT levels</p></div>
+                <div className="row wrap-w gap-sm">
+                  {ALL_LEVELS.map((l) => (
+                    <button key={l} className="chip" data-on={levels.includes(l)} onClick={() => toggle(l, setLevels)}>
+                      <span className="jp-level" data-lv={l} style={{ border: 'none', padding: 0 }}>
+                        {l.toUpperCase()}
+                      </span>
+                      <span>{LEVEL_INFO[l]}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="card-note" style={{ marginTop: 14 }}>
+                  {pool.length.toLocaleString()} words in the selected range.
+                </p>
+              </section>
 
-            <section className="panel panel-lg" style={{ padding: 24 }}>
-              <p className="label" style={{ marginBottom: 14 }}>Question types</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 10 }}>
-                {ALL_MODES.map((m) => (
-                  <button key={m} className="choice" data-state={modes.includes(m) ? 'correct' : undefined}
-                    onClick={() => toggle(m, setModes)} style={{ textAlign: 'left' }}>
-                    <span className="choice-key">{MODE_INFO[m].emoji}</span>
-                    <span>
-                      <strong style={{ display: 'block' }}>{MODE_INFO[m].title}</strong>
-                      <span className="muted" style={{ fontSize: '0.82em', fontWeight: 400 }}>{MODE_INFO[m].blurb}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
+              <section className="card panel span-2">
+                <div className="card-head"><p className="label">Question types</p></div>
+                <div className="grid-auto">
+                  {ALL_MODES.map((m) => (
+                    <button key={m} className="round-choice" data-on={modes.includes(m)}
+                      onClick={() => toggle(m, setModes)}>
+                      <span className="round-choice-emoji">{MODE_INFO[m].emoji}</span>
+                      <span className="grow">
+                        <strong className="round-choice-title">{MODE_INFO[m].title}</strong>
+                        <span className="round-choice-blurb">{MODE_INFO[m].blurb}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
 
-            <section className="panel panel-lg" style={{ padding: 24 }}>
-              <p className="label" style={{ marginBottom: 14 }}>How many questions?</p>
-              <div className="seg">
-                {[10, 15, 25, 40].map((n) => (
-                  <button key={n} data-on={total === n} onClick={() => { sfx.select(); setTotal(n); }}>{n}</button>
-                ))}
-              </div>
-            </section>
+              <section className="card panel span-2">
+                <div className="card-head"><p className="label">How many questions?</p></div>
+                <div className="seg">
+                  {[10, 15, 25, 40].map((n) => (
+                    <button key={n} data-on={total === n} onClick={() => { sfx.select(); setTotal(n); }}>{n}</button>
+                  ))}
+                </div>
+              </section>
 
-            <button className="btn btn-primary btn-lg" style={{ justifySelf: 'center' }}
-              onClick={begin} disabled={!levels.length || !modes.length}>
-              Start the duel →
-            </button>
+              <div className="sheet-footer span-2">
+                <Cta className="btn-lg" arrow="→" onClick={begin} disabled={!levels.length || !modes.length}>
+                  Start the duel
+                </Cta>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </Screen>
     );
   }
 
@@ -249,28 +278,35 @@ export default function Japanese({ onExit }: { onExit: () => void }) {
   if (phase === 'done') {
     const champ = scores[0] === scores[1] ? null : scores[0] > scores[1] ? 0 : 1;
     return (
-      <div className="jp">
-        <div className="jp-mark" aria-hidden>勝</div>
-        <div className="wrap podium">
-          <p className="eyebrow">Duel over</p>
-          <h1 className="winner-name display" style={{ ['--c' as string]: champ === null ? '#fff' : colours[champ] }}>
-            {champ === null ? 'Dead heat' : `${names[champ]} wins`}
-          </h1>
-          <div className="final-scores">
-            {[0, 1].map((i) => (
-              <div key={i} className="final-card" style={{ ['--c' as string]: colours[i] }}>
-                <div className="team-meta">{names[i]}</div>
-                <div className="team-score" style={{ ['--c' as string]: colours[i] }}>{scores[i]}</div>
+      <Screen theme={JP_THEME}>
+        <div className="jp-mark" aria-hidden>{mark}</div>
+        <Hud><Wordmark jp="日本語デュエル" en="Result" /></Hud>
+        <Rail items={rails} active="jp" />
+
+        <div className="screen-main">
+          <div className="stage">
+            <div className="podium">
+              <p className="eyebrow">Duel over</p>
+              <h1 className="winner-name" style={{ ['--c' as string]: champ === null ? 'var(--accent)' : colours[champ] }}>
+                {champ === null ? 'Dead heat' : `${names[champ]} wins`}
+              </h1>
+              <div className="final-scores">
+                {[0, 1].map((i) => (
+                  <div key={i} className="final-card" style={{ ['--c' as string]: colours[i] }}>
+                    <div className="team-meta">{names[i]}</div>
+                    <div className="team-score" style={{ ['--c' as string]: colours[i] }}>{scores[i]}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="row gap-sm wrap-w" style={{ justifyContent: 'center' }}>
-            <button className="btn btn-primary btn-lg" onClick={() => setPhase('setup')}>Run it back</button>
-            <button className="btn btn-ghost" onClick={onExit}>Back to menu</button>
+              <div className="row gap-sm wrap-w" style={{ justifyContent: 'center' }}>
+                <Cta className="btn-lg" arrow="↺" onClick={() => setPhase('setup')}>Run it back</Cta>
+                <button className="btn btn-ghost" onClick={onExit}>Back to menu</button>
+              </div>
+            </div>
           </div>
         </div>
-        <Confetti nonce={confetti} colours={[colours[0], colours[1], '#ffc53d', '#fff']} />
-      </div>
+        <Confetti nonce={confetti} colours={[colours[0], colours[1], '#f472b6', '#fff']} />
+      </Screen>
     );
   }
 
@@ -280,10 +316,17 @@ export default function Japanese({ onExit }: { onExit: () => void }) {
   const isType = q.mode === 'type';
 
   return (
-    <div className="jp">
-      <div className="jp-mark" aria-hidden>{q.mode === 'kana' ? 'あ' : '語'}</div>
+    <Screen theme={JP_THEME}>
+      <div className="jp-mark" aria-hidden>{mark}</div>
+      <Hud>
+        <Wordmark jp="日本語デュエル" en={MODE_INFO[q.mode].title} />
+        <div className="hud-right">
+          <span className="hud-pill">{index + 1} / {total}</span>
+        </div>
+      </Hud>
+      <Rail items={rails} active="jp" />
 
-      <div className="wrap">
+      <div className="arena-body">
         <div className="scoreboard">
           {[0, 1].map((i) => (
             <div key={i} className="team-card" data-side={i === 1 ? 'b' : 'a'}
@@ -292,7 +335,7 @@ export default function Japanese({ onExit }: { onExit: () => void }) {
               data-active={isType && typeTurn === i}
               style={{ ['--c' as string]: colours[i] }}>
               <span className="team-dot" />
-              <div className="grow" style={{ minWidth: 0 }}>
+              <div className="grow">
                 <div className="team-name">{names[i]}</div>
                 <div className="team-meta">
                   {streaks[i] > 1 ? `🔥 ${streaks[i]} in a row` : `keys ${KEYS[i as PlayerId][0]}–${KEYS[i as PlayerId][3]}`}
@@ -302,90 +345,89 @@ export default function Japanese({ onExit }: { onExit: () => void }) {
             </div>
           ))}
           <div className="round-pill">
-            <span className="round-num">{index + 1}<span className="dim">/{total}</span></span>
+            <span className="round-num">{index + 1}<span>/{total}</span></span>
             <span className="round-kind">{MODE_INFO[q.mode].title}</span>
           </div>
         </div>
-      </div>
 
-      <div className="stage wrap">
-        <div className="row gap-sm" style={{ justifyContent: 'center' }}>
-          <span className="jp-level" data-lv={q.level}>{q.level.toUpperCase()}</span>
-          <span className="category-badge">{q.ask}</span>
+        <div className="stage">
+          <div className="row gap-sm wrap-w" style={{ justifyContent: 'center' }}>
+            <span className="jp-level" data-lv={q.level}>{q.level.toUpperCase()}</span>
+            <span className="category-badge">{q.ask}</span>
+          </div>
+
+          <div className={q.mode === 'en-jp' ? 'jp-english' : 'jp-word'}>{q.main}</div>
+          {q.sub && !answered && q.mode !== 'reading' && <p className="jp-romaji">{q.sub}</p>}
+          {q.sub && q.mode === 'reading' && <p className="jp-reading">{q.sub}</p>}
+
+          {!answered && <TimerBar left={left} total={SECONDS} />}
+
+          {isType ? (
+            <div className="stack gap center">
+              <p className="eyebrow" style={{ color: colours[typeTurn] }}>{names[typeTurn]}&apos;s turn to type</p>
+              <input
+                ref={inputRef}
+                className="jp-type-input"
+                data-state={typeState === 'idle' ? undefined : typeState}
+                value={typed}
+                disabled={answered}
+                placeholder="romaji…"
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                onChange={(e) => setTyped(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitTyped(); }}
+              />
+              {!answered && <button className="btn btn-primary" onClick={submitTyped}>Submit</button>}
+            </div>
+          ) : (
+            <div className="choices">
+              {q.choices.map((choice, i) => {
+                const by = ([0, 1] as PlayerId[]).filter((p) => picks[p] === choice);
+                const stateAttr = answered
+                  ? choice === q.answer ? 'correct' : by.length ? 'wrong' : 'muted'
+                  : by.length ? 'wrong' : undefined;
+                return (
+                  <button key={`${q.id}-${choice}`} className="choice" data-state={stateAttr} disabled={answered}
+                    onClick={() => {
+                      const p: PlayerId | null = !locked.includes(0) && picks[0] === undefined ? 0
+                        : !locked.includes(1) && picks[1] === undefined ? 1 : null;
+                      if (p !== null) { sfx.select(); choose(p, choice); }
+                    }}>
+                    <span className="choice-key">{i + 1}</span>
+                    <span className="grow">{choice}</span>
+                    <span className="picks">
+                      {by.map((p) => (
+                        <span key={p} className="pick-chip" style={{ ['--c' as string]: colours[p] }}>
+                          {names[p].slice(0, 8)}
+                        </span>
+                      ))}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {answered && (
+            <div className="stack gap-sm center">
+              <p className="answer-reveal" style={{ fontSize: 'clamp(1.4rem,4vw,2.4rem)' }}>{q.reveal}</p>
+              {winner !== null && <p className="stage-note">Point to <b style={{ color: colours[winner] }}>{names[winner]}</b></p>}
+              <button className="btn btn-ghost btn-sm" onClick={() => nextQuestion(index + 1)}>Next now →</button>
+            </div>
+          )}
+
+          {!answered && !isType && (
+            <p className="stage-note">
+              <b style={{ color: colours[0] }}>{names[0]}</b> <span className="kbd">1</span>–<span className="kbd">4</span>
+              &nbsp;·&nbsp;
+              <b style={{ color: colours[1] }}>{names[1]}</b> <span className="kbd">7</span>–<span className="kbd">0</span>
+            </p>
+          )}
         </div>
-
-        <div className={q.mode === 'en-jp' ? 'jp-english' : 'jp-word'}>{q.main}</div>
-        {q.sub && !answered && q.mode !== 'reading' && <p className="jp-romaji">{q.sub}</p>}
-        {q.sub && q.mode === 'reading' && <p className="muted" style={{ fontSize: '1.05em' }}>{q.sub}</p>}
-
-        {!answered && <TimerBar left={left} total={SECONDS} />}
-
-        {isType ? (
-          <div className="stack gap center">
-            <p className="eyebrow" style={{ color: colours[typeTurn] }}>{names[typeTurn]}&apos;s turn to type</p>
-            <input
-              ref={inputRef}
-              className="jp-type-input"
-              data-state={typeState === 'idle' ? undefined : typeState}
-              value={typed}
-              disabled={answered}
-              placeholder="romaji…"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              onChange={(e) => setTyped(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') submitTyped(); }}
-            />
-            {!answered && <button className="btn btn-primary" onClick={submitTyped}>Submit</button>}
-          </div>
-        ) : (
-          <div className="choices">
-            {q.choices.map((choice, i) => {
-              const by = ([0, 1] as PlayerId[]).filter((p) => picks[p] === choice);
-              const stateAttr = answered
-                ? choice === q.answer ? 'correct' : by.length ? 'wrong' : 'muted'
-                : by.length ? 'wrong' : undefined;
-              return (
-                <button key={`${q.id}-${choice}`} className="choice" data-state={stateAttr} disabled={answered}
-                  onClick={() => {
-                    const p: PlayerId | null = !locked.includes(0) && picks[0] === undefined ? 0
-                      : !locked.includes(1) && picks[1] === undefined ? 1 : null;
-                    if (p !== null) { sfx.select(); choose(p, choice); }
-                  }}>
-                  <span className="choice-key">{i + 1}</span>
-                  <span className="grow">{choice}</span>
-                  <span className="picks">
-                    {by.map((p) => (
-                      <span key={p} className="pick-chip" style={{ ['--c' as string]: colours[p] }}>
-                        {names[p].slice(0, 8)}
-                      </span>
-                    ))}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {answered && (
-          <div className="stack gap-sm center">
-            <p className="answer-reveal display" style={{ fontSize: 'clamp(1.4rem,4vw,2.4rem)' }}>{q.reveal}</p>
-            {winner !== null && <p className="muted">Point to <b style={{ color: colours[winner] }}>{names[winner]}</b></p>}
-            <button className="btn btn-ghost btn-sm" onClick={() => nextQuestion(index + 1)}>Next now →</button>
-          </div>
-        )}
-
-        {!answered && !isType && (
-          <p className="muted" style={{ fontSize: '0.85em' }}>
-            <b style={{ color: colours[0] }}>{names[0]}</b> <span className="kbd">1</span>–<span className="kbd">4</span>
-            &nbsp;·&nbsp;
-            <b style={{ color: colours[1] }}>{names[1]}</b> <span className="kbd">7</span>–<span className="kbd">0</span>
-          </p>
-        )}
       </div>
 
       <Verdict kind={fx.kind} nonce={fx.nonce} />
-      <button className="exit-btn" onClick={onExit} aria-label="Exit to menu" title="Exit">×</button>
-    </div>
+    </Screen>
   );
 }

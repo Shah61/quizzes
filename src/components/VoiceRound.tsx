@@ -76,7 +76,7 @@ export default function VoiceRound({
     <div className="stack gap center" style={{ width: 'min(94vw, 760px)' }}>
       <div className="voice-brief">
         <span className="eyebrow">Perform</span>
-        <h2 className="display voice-character">{voice.character}</h2>
+        <h2 className="voice-character">{voice.character}</h2>
         {voice.from !== 'generic' && <p className="voice-from">{voice.from}</p>}
         <p className="voice-direction">{voice.direction}</p>
       </div>
@@ -136,8 +136,8 @@ export default function VoiceRound({
         <p className="eyebrow">Who did it better?</p>
         <div className="row gap-sm wrap-w" style={{ justifyContent: 'center' }}>
           {(['a', 'b'] as TeamId[]).map((team) => (
-            <button key={team} className="btn btn-lg"
-              style={{ borderColor: teamColours[team], color: teamColours[team] }}
+            <button key={team} className="btn btn-primary btn-lg"
+              style={{ boxShadow: `0 20px 44px -22px ${teamColours[team]}` }}
               onClick={() => { sfx.correct(); onWinner(team); }}>
               {teamNames[team]}
             </button>

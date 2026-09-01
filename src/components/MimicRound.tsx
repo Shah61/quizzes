@@ -175,9 +175,9 @@ export default function MimicRound({
     <div className="mimic-card">
       <span className="eyebrow">Copy this sound</span>
       <div className="mimic-emoji">{reference.emoji}</div>
-      <h2 className="display mimic-name">{reference.name}</h2>
+      <h2 className="mimic-name">{reference.name}</h2>
       {reference.from && <p className="muted mimic-from">{reference.from}</p>}
-      <p className="muted" style={{ fontSize: '0.9em' }}>
+      <p className="dim" style={{ fontSize: '0.86em' }}>
         {takeSeconds.toFixed(1)}s · one shot, no retries
       </p>
     </div>
@@ -187,7 +187,7 @@ export default function MimicRound({
     return (
       <div className="stack gap center">
         {soundCard}
-        <p className="muted">Loading the sound…</p>
+        <p className="stage-note">Loading the sound…</p>
       </div>
     );
   }
@@ -211,7 +211,7 @@ export default function MimicRound({
       <div className="stack gap center">
         {soundCard}
         <p className="eyebrow" style={{ color: teamColours[turn] }}>{teamNames[turn]} — get ready</p>
-        <div className="mimic-count display">{count}</div>
+        <div className="mimic-count">{count}</div>
       </div>
     );
   }
@@ -233,7 +233,7 @@ export default function MimicRound({
     return (
       <div className="stack gap center">
         {soundCard}
-        <p className="muted">Scoring the take…</p>
+        <p className="stage-note">Scoring the take…</p>
       </div>
     );
   }
@@ -254,7 +254,7 @@ export default function MimicRound({
               <div key={team} className="mimic-score-card" data-win={winner === team}
                 style={{ ['--c' as string]: teamColours[team] }}>
                 <span className="voice-team">{teamNames[team]}</span>
-                <div className="mimic-total display">{res?.score.total ?? 0}</div>
+                <div className="mimic-total">{res?.score.total ?? 0}</div>
                 <div className="mimic-bars">
                   <Bar label="melody" value={res?.score.melody ?? 0} />
                   <Bar label="rhythm" value={res?.score.rhythm ?? 0} />
@@ -316,7 +316,7 @@ export default function MimicRound({
           {phase === 'listening' ? '♪ Listen…' : '▶ Play the sound'}
         </button>
         <button className="btn btn-primary btn-lg" disabled={!recordable || recording || phase === 'listening'}
-          style={{ borderColor: teamColours[turn] }}
+          style={{ boxShadow: `0 20px 44px -22px ${teamColours[turn]}` }}
           onClick={() => runTake(turn)}>
           🎤 {teamNames[turn]} — take your shot
         </button>

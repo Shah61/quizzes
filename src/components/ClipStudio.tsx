@@ -23,6 +23,7 @@ import { masterGain } from '@/game/volume';
 import { clipId, deleteClip, listClips, saveClip, type ClipMeta } from '@/game/mimic-clips';
 import { refsFor, setCustomRefs, type MimicRef, type MimicSourceId, MIMIC_SOURCE_INFO } from '@/game/mimic-refs';
 import { sfx } from '@/game/sfx';
+import { Hud, Rail, Screen, Wordmark, type RailItem } from './Shell';
 
 const ACCEPT = 'audio/*,video/*,.mp3,.m4a,.wav,.webm,.mp4,.ogg,.aac,.flac,.mov';
 const EMOJI_CHOICES = ['🎬', '⚔️', '🦸', '🔊', '😱', '💥', '🎤', '🐉', '👊', '🌀', '🎵', '⭐'];
@@ -63,6 +64,16 @@ function computePeaks(buffer: AudioBuffer): Float32Array {
 }
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+/** The studio runs cool — cyan and violet, the colour of an editing bay. */
+const STUDIO_THEME: React.CSSProperties = {
+  ['--accent' as string]: '#22d3ee',
+  ['--accent-2' as string]: '#a855f7',
+  ['--on-accent' as string]: '#03222b',
+  ['--wash-1' as string]: 'rgba(34, 211, 238, 0.34)',
+  ['--wash-2' as string]: 'rgba(168, 85, 247, 0.24)',
+  ['--wash-3' as string]: 'rgba(6, 20, 32, 0.82)',
+};
 
 export default function ClipStudio({ onBack }: { onBack: () => void }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -194,18 +205,18 @@ export default function ClipStudio({ onBack }: { onBack: () => void }) {
     const selTo = ((start + length) / duration) * w;
 
     // Selected span lit, the rest dimmed — the window is the point of the view.
-    g.fillStyle = 'rgba(124, 92, 255, 0.16)';
+    g.fillStyle = 'rgba(255, 194, 46, 0.14)';
     g.fillRect(selFrom, 0, Math.max(1, selTo - selFrom), h);
 
     for (let i = 0; i < PEAKS; i++) {
       const x = (i / PEAKS) * w;
       const inSel = x >= selFrom && x <= selTo;
       const amp = loaded.peaks[i] * (h / 2 - 3);
-      g.fillStyle = inSel ? '#22d3ee' : 'rgba(255,255,255,0.19)';
+      g.fillStyle = inSel ? '#ffc22e' : 'rgba(255,255,255,0.20)';
       g.fillRect(x, mid - amp, Math.max(1, w / PEAKS), Math.max(1, amp * 2));
     }
 
-    g.strokeStyle = '#7c5cff';
+    g.strokeStyle = '#ffe49a';
     g.lineWidth = 2;
     for (const x of [selFrom, selTo]) {
       g.beginPath();
@@ -290,30 +301,42 @@ export default function ClipStudio({ onBack }: { onBack: () => void }) {
 
   /* -------------------------------------------------------------- views */
 
+  const rails: RailItem[] = [
+    { key: 'back', icon: 'back', label: 'Back to setup', onGo: onBack },
+    { key: 'studio', icon: 'scissors', label: 'Clip Studio' },
+  ];
+
   return (
-    <div className="shell">
-      <div className="wrap">
-        <div className="topbar">
-          <button className="btn btn-ghost btn-sm" onClick={onBack}>← Back</button>
-          <h2 className="display" style={{ fontSize: '1.5rem' }}>✂️ Clip Studio</h2>
+    <Screen theme={STUDIO_THEME}>
+      <Hud>
+        <Wordmark jp="クリップスタジオ" en="Clip studio" />
+        <div className="hud-right">
+          <span className="hud-pill">{saved.length} saved</span>
         </div>
+      </Hud>
+      <Rail items={rails} active="studio" />
 
-        <div className="stack gap" style={{ paddingTop: 22, gap: 18 }}>
-          <p className="muted" style={{ fontSize: '0.92em', maxWidth: '70ch' }}>
-            Cut your own sounds for the Mimic round. Import a file from this device, or
-            open one of the built-in scenes and re-cut it. Clips are saved in this
-            browser only — nothing is uploaded.
-          </p>
+      <div className="screen-main">
+        <div className="sheet">
+          <div className="sheet-head">
+            <h1 className="sheet-title">Clip Studio</h1>
+            <p className="sheet-lede">
+              Cut your own sounds for the Mimic round. Import a file from this device, or
+              open one of the built-in scenes and re-cut it. Clips are saved in this
+              browser only — nothing is uploaded.
+            </p>
+          </div>
 
+          <div className="sheet-body" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
           {error && (
-            <div className="panel" style={{ padding: 14, borderColor: 'rgba(255,77,106,0.4)' }}>
-              <p style={{ color: 'var(--bad)', fontSize: '0.9em' }}>{error}</p>
+            <div className="card panel" style={{ borderColor: 'rgba(240,66,106,0.5)' }}>
+              <p style={{ color: 'var(--bad)', fontSize: '0.9em', fontWeight: 650 }}>{error}</p>
             </div>
           )}
 
           {/* ------------------------------------------------ import */}
           {!loaded && (
-            <section className="panel panel-lg" style={{ padding: 24 }}>
+            <section className="card panel">
               <p className="label" style={{ marginBottom: 14 }}>Start from</p>
               <div
                 className="clip-drop"
@@ -375,7 +398,7 @@ export default function ClipStudio({ onBack }: { onBack: () => void }) {
 
           {/* ------------------------------------------------ editor */}
           {loaded && (
-            <section className="panel panel-lg" style={{ padding: 24 }}>
+            <section className="card panel">
               <div className="row gap-sm wrap-w" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
                 <p className="label">{loaded.label}</p>
                 <button className="btn btn-ghost btn-sm" onClick={() => { stopPreview(); setLoaded(null); }}>
@@ -468,7 +491,7 @@ export default function ClipStudio({ onBack }: { onBack: () => void }) {
           )}
 
           {/* ------------------------------------------------ saved */}
-          <section className="panel panel-lg" style={{ padding: 24 }}>
+          <section className="card panel">
             <div className="row wrap-w gap-sm" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
               <p className="label">Your clips</p>
               <span className="chip-count">{saved.length} saved</span>
@@ -493,8 +516,9 @@ export default function ClipStudio({ onBack }: { onBack: () => void }) {
               ))}
             </div>
           </section>
+          </div>
         </div>
       </div>
-    </div>
+    </Screen>
   );
 }

@@ -8,10 +8,12 @@ import {
 } from '@/game/engine';
 import { playingTeams } from '@/game/types';
 import { recordDaily, type DailyRecord } from '@/game/daily';
+import { themeFor, themeVars } from '@/game/theme';
 import { sfx } from '@/game/sfx';
 import {
   BuzzBanner, Confetti, OpeningPlayer, PRELOAD_AHEAD, RevealImage, ScoreNumber, TimerBar, TimerRing, Toast, Verdict,
 } from './bits';
+import { Cta, Hud, Rail, Screen, Wordmark, type RailItem } from './Shell';
 import OnlineRoom from './OnlineRoom';
 import VoiceRound from './VoiceRound';
 import MimicRound from './MimicRound';
@@ -43,6 +45,10 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
   const turn = turnTeam(state);
   // Whether the answer keys, rather than the buzzers, are what this round uses.
   const lockInKeys = usesLockIn(state);
+  // The round's own colours and display face. Set as custom properties on the
+  // screen, so the wash, the headings and every accent follow along without a
+  // single child component knowing which round it is in.
+  const theme = themeFor(round?.kind);
 
   // The rest of the round's tracks, so the player can pull them ahead of time
   // instead of making the room wait once per song. Memoised on the index so the
@@ -159,13 +165,22 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
 
   if (!rounds.length) {
     return (
-      <div className="shell wrap center" style={{ minHeight: '100dvh', textAlign: 'center' }}>
-        <div className="stack gap">
-          <h2 className="display" style={{ fontSize: '2rem' }}>No questions matched those settings</h2>
-          <p className="muted">Try turning on more topics or a different set of rounds.</p>
-          <button className="btn btn-primary" onClick={onExit}>Back to setup</button>
+      <Screen>
+        <Hud><Wordmark jp="クイズ" /></Hud>
+        <div className="screen-main">
+          <div className="stage">
+            <div className="round-intro">
+              <h2 className="round-intro-title">Nothing matched</h2>
+              <hr className="round-intro-rule" />
+              <p className="card-note" style={{ textAlign: 'center' }}>
+                No questions came back for those settings. Try turning on more topics,
+                or a different set of rounds.
+              </p>
+              <Cta onClick={onExit} arrow="←">Back to setup</Cta>
+            </div>
+          </div>
         </div>
-      </div>
+      </Screen>
     );
   }
 
@@ -227,43 +242,41 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
   };
 
   const Scoreboard = (
-    <div className="wrap">
-      <div className="scoreboard">
-        {teams.map((id) => {
-          const team = teamOf(id);
-          const active = round?.kind === 'rapid' ? state.rapidTeam === id
-            : round?.kind === 'chain' ? state.chainTeam === id : false;
-          return (
-            <div
-              key={id}
-              className="team-card"
-              data-side={id === 'b' ? 'b' : 'a'}
-              data-buzzed={state.buzzed === id}
-              data-locked={state.lockedOut.includes(id)}
-              data-active={active}
-              style={{ ['--c' as string]: team.colour }}
-            >
-              <span className="team-dot" />
-              <div className="grow" style={{ minWidth: 0 }}>
-                <div className="team-name">{team.name}</div>
-                <div className="team-meta">
-                  {active ? 'their turn'
-                    : state.lockedOut.includes(id) ? 'locked out'
-                    // Advertising a buzzer key in a game with no buzzers is the
-                    // clearest way to make a no-host game look like a hosted one.
-                    : config.solo ? 'solo run'
-                    : lockInKeys ? `keys ${MCQ_KEYS[id][0]}–${MCQ_KEYS[id][3]}`
-                    : `buzz: ${TEAM_KEY[id]}`}
-                </div>
+    <div className="scoreboard">
+      {teams.map((id) => {
+        const team = teamOf(id);
+        const active = round?.kind === 'rapid' ? state.rapidTeam === id
+          : round?.kind === 'chain' ? state.chainTeam === id : false;
+        return (
+          <div
+            key={id}
+            className="team-card"
+            data-side={id === 'b' ? 'b' : 'a'}
+            data-buzzed={state.buzzed === id}
+            data-locked={state.lockedOut.includes(id)}
+            data-active={active}
+            style={{ ['--c' as string]: team.colour }}
+          >
+            <span className="team-dot" />
+            <div className="grow">
+              <div className="team-name">{team.name}</div>
+              <div className="team-meta">
+                {active ? 'their turn'
+                  : state.lockedOut.includes(id) ? 'locked out'
+                  // Advertising a buzzer key in a game with no buzzers is the
+                  // clearest way to make a no-host game look like a hosted one.
+                  : config.solo ? 'solo run'
+                  : lockInKeys ? `keys ${MCQ_KEYS[id][0]}–${MCQ_KEYS[id][3]}`
+                  : `buzz: ${TEAM_KEY[id]}`}
               </div>
-              <ScoreNumber value={state.scores[id]} bump={state.scoreFx[id]} colour={team.colour} />
             </div>
-          );
-        })}
-        <div className="round-pill">
-          <span className="round-num">{Math.min(state.roundIndex + 1, rounds.length)}<span className="dim">/{rounds.length}</span></span>
-          <span className="round-kind">{round ? ROUND_INFO[round.kind].title : ''}</span>
-        </div>
+            <ScoreNumber value={state.scores[id]} bump={state.scoreFx[id]} colour={team.colour} />
+          </div>
+        );
+      })}
+      <div className="round-pill">
+        <span className="round-num">{Math.min(state.roundIndex + 1, rounds.length)}<span>/{rounds.length}</span></span>
+        <span className="round-kind">{round ? ROUND_INFO[round.kind].title : ''}</span>
       </div>
     </div>
   );
@@ -331,37 +344,39 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
     const w = winnerOf(state);
     const champ = w === 'tie' ? null : teamOf(w);
     stage = (
-      <div className="wrap podium">
-        <p className="eyebrow">Final result</p>
-        <h1 className="winner-name display" style={{ ['--c' as string]: champ?.colour ?? '#fff' }}>
-          {config.solo ? `${state.scores.a} points` : champ ? `${champ.name} wins` : "It's a tie"}
-        </h1>
-        {daily && (
-          <div className="row gap wrap-w" style={{ justifyContent: 'center' }}>
-            <span className="category-badge">🔥 {daily.streak} day streak</span>
-            <span className="category-badge">Best {daily.bestScore}</span>
-            <span className="category-badge">{daily.played} day{daily.played === 1 ? '' : 's'} played</span>
-          </div>
-        )}
-        <div className="final-scores">
-          {teams.map((id) => (
-            <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour }}>
-              <div className="team-meta">{teamOf(id).name}</div>
-              <div className="team-score" style={{ ['--c' as string]: teamOf(id).colour }}>{state.scores[id]}</div>
+      <div className="stage">
+        <div className="podium">
+          <p className="eyebrow">Final result</p>
+          <h1 className="winner-name" style={{ ['--c' as string]: champ?.colour ?? 'var(--accent)' }}>
+            {config.solo ? `${state.scores.a} points` : champ ? `${champ.name} wins` : "It's a tie"}
+          </h1>
+          {daily && (
+            <div className="row gap-sm wrap-w" style={{ justifyContent: 'center' }}>
+              <span className="category-badge">🔥 {daily.streak} day streak</span>
+              <span className="category-badge">Best {daily.bestScore}</span>
+              <span className="category-badge">{daily.played} day{daily.played === 1 ? '' : 's'} played</span>
             </div>
-          ))}
-        </div>
-        <div className="row gap-sm wrap-w" style={{ justifyContent: 'center', marginTop: 10 }}>
-          <button className="btn btn-primary btn-lg" onClick={onExit}>Play again</button>
+          )}
+          <div className="final-scores">
+            {teams.map((id) => (
+              <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour }}>
+                <div className="team-meta">{teamOf(id).name}</div>
+                <div className="team-score" style={{ ['--c' as string]: teamOf(id).colour }}>{state.scores[id]}</div>
+              </div>
+            ))}
+          </div>
+          <Cta className="btn-lg" onClick={onExit} arrow="↺">Play again</Cta>
         </div>
       </div>
     );
   } else if (state.phase === 'round-end') {
     const isLast = state.roundIndex >= rounds.length - 1;
     stage = (
-      <div className="stage wrap">
+      <div className="stage">
         <p className="eyebrow">Round {state.roundIndex + 1} complete</p>
-        <h2 className="display" style={{ fontSize: 'clamp(2rem,6vw,4rem)' }}>{round && ROUND_INFO[round.kind].title}</h2>
+        <h2 className="display" style={{ fontSize: 'clamp(2rem,6vw,4rem)', color: '#fff', textShadow: '0 6px 30px rgba(0,0,0,.6)' }}>
+          {round && ROUND_INFO[round.kind].title}
+        </h2>
         <div className="final-scores">
           {teams.map((id) => (
             <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour }}>
@@ -370,55 +385,60 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
             </div>
           ))}
         </div>
-        <button
-          className="btn btn-primary btn-lg"
+        <Cta
+          className="btn-lg"
+          arrow="→"
           onClick={() => {
             sfx.start();
             dispatch(isLast ? { type: 'end-game' } : { type: 'next-round' });
           }}
         >
-          {isLast ? 'See the final result' : 'Next round →'}
-        </button>
+          {isLast ? 'See the final result' : 'Next round'}
+        </Cta>
       </div>
     );
   } else if (state.phase === 'round-intro' && round) {
     const info = ROUND_INFO[round.kind];
-    const rapidTurn = round.kind === 'rapid';
     stage = (
-      <div className="stage wrap">
-        <p className="eyebrow">Round {state.roundIndex + 1} of {rounds.length}</p>
-        <div style={{ fontSize: '4.5rem', lineHeight: 1 }}>{info.emoji}</div>
-        <h2 className="display" style={{ fontSize: 'clamp(2.4rem,8vw,5rem)' }}>{info.title}</h2>
-        <p className="muted" style={{ maxWidth: '46ch' }}>{info.blurb}</p>
-        {rapidTurn && (
-          <p className="category-badge" style={{ background: 'transparent', borderColor: teamOf(state.rapidTeam).colour, color: teamOf(state.rapidTeam).colour }}>
-            {teamOf(state.rapidTeam).name} is up
+      <div className="stage">
+        <div className="round-intro">
+          <p className="eyebrow">Round {state.roundIndex + 1} of {rounds.length}</p>
+          <div className="round-intro-emoji">{info.emoji}</div>
+          <h2 className="round-intro-title">{info.title}</h2>
+          <hr className="round-intro-rule" />
+          <p className="card-note" style={{ textAlign: 'center', maxWidth: '42ch' }}>{info.blurb}</p>
+          {round.kind === 'rapid' && (
+            <span className="category-badge" style={{ borderColor: teamOf(state.rapidTeam).colour, color: teamOf(state.rapidTeam).colour }}>
+              {teamOf(state.rapidTeam).name} is up
+            </span>
+          )}
+          <p className="dim" style={{ fontSize: '0.86em' }}>
+            {round.points > 0 && `${round.points} points a question`}
+            {round.seconds ? ` · ${round.seconds}s on the clock` : ''}
           </p>
-        )}
-        <p className="muted" style={{ fontSize: '0.9em' }}>
-          {round.points > 0 && `${round.points} points a question`}
-          {round.seconds ? ` · ${round.seconds}s on the clock` : ''}
-        </p>
-        <button className="btn btn-primary btn-lg" onClick={() => { sfx.start(); dispatch({ type: 'start-round' }); }}>
-          Start round
-        </button>
+          <Cta className="btn-lg" arrow="→" onClick={() => { sfx.start(); dispatch({ type: 'start-round' }); }}>
+            Start round
+          </Cta>
+        </div>
       </div>
     );
   } else if (state.phase === 'wager-set' && round) {
     stage = (
-      <div className="stage wrap">
+      <div className="stage">
         <p className="eyebrow">Final Wager</p>
-        <h2 className="display" style={{ fontSize: 'clamp(2rem,6vw,3.4rem)' }}>Place your bets</h2>
+        <h2 className="display" style={{ fontSize: 'clamp(2rem,6vw,3.4rem)', color: '#fff', textShadow: '0 6px 30px rgba(0,0,0,.6)' }}>
+          Place your bets
+        </h2>
         <p className="muted" style={{ maxWidth: '44ch' }}>
           {config.solo
             ? 'Bet before you see the question. Get it right and you win the bet — get it wrong and you lose it.'
             : 'Each team bets before seeing the question. Get it right and you win the bet — get it wrong and you lose it.'}
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 18, width: 'min(92vw,620px)' }}>
+        <div className="final-scores">
           {teams.map((id) => (
-            <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour, textAlign: 'center' }}>
+            <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour, minWidth: 230 }}>
               <div className="team-meta">{teamOf(id).name}</div>
-              <div className="muted" style={{ fontSize: '0.82em', marginBottom: 10 }}>has {state.scores[id]} points</div>
+              <div className="dim" style={{ fontSize: '0.82em', marginBottom: 10 }}>has {state.scores[id]} points</div>
               <input
                 className="input tabular"
                 type="number"
@@ -431,15 +451,15 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
             </div>
           ))}
         </div>
-        <button className="btn btn-primary btn-lg" onClick={() => { sfx.start(); dispatch({ type: 'confirm-wagers' }); }}>
-          Lock in the bets →
-        </button>
+        <Cta className="btn-lg" arrow="→" onClick={() => { sfx.start(); dispatch({ type: 'confirm-wagers' }); }}>
+          Lock in the bets
+        </Cta>
       </div>
     );
   } else if (q && round?.kind === 'mimic' && state.phase === 'question') {
     const reference = q.mimicId ? findRef(q.mimicId) : null;
     stage = (
-      <div className="stage wrap">
+      <div className="stage">
         <span className="category-badge">🔊 Mimic · {state.qIndex + 1}/{round.questions.length}</span>
         {reference && (
           <MimicRound
@@ -460,7 +480,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
     );
   } else if (q && (round?.kind === 'geo' || round?.kind === 'street') && state.phase === 'question') {
     stage = (
-      <div className="stage wrap">
+      <div className="stage" style={{ justifyContent: 'flex-start' }}>
         <span className="category-badge">
           {ROUND_INFO[round.kind].emoji} {ROUND_INFO[round.kind].title} · {state.qIndex + 1}/{round.questions.length}
         </span>
@@ -477,7 +497,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
     );
   } else if (q && round?.kind === 'voice' && state.phase === 'question') {
     stage = (
-      <div className="stage wrap">
+      <div className="stage">
         <span className="category-badge">🎤 Voice Battle</span>
         <VoiceRound
           question={q}
@@ -493,55 +513,77 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
     const revealed = state.phase === 'revealed';
     const lockIn = usesLockIn(state);
     const showChoices = lockIn;
+    // Rapid fire and the multiple-choice round are paced by a bar across the
+    // screen; everything else counts down on a ring.
+    const barClock = round.kind === 'rapid' || round.kind === 'mcq';
+    const showClock = Boolean(round.seconds) && !revealed;
+    const ringOnMedia = showClock && !barClock && Boolean(questionMedia);
 
     stage = (
-      <div className="stage wrap">
-        <span className="category-badge">
-          {CATEGORY_EMOJI[q.category]} {CATEGORY_LABEL[q.category]}
-        </span>
-
-        {round.kind === 'chain' && (
-          <div className="row gap-sm" style={{ justifyContent: 'center' }}>
-            <span className="streak">🔥 streak {state.chainStreak}</span>
-            <span className="tag" style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}>
-              pot {state.chainPot}
+      <div className="stage">
+        <div className="row gap-sm wrap-w" style={{ justifyContent: 'center' }}>
+          <span className="category-badge">
+            {CATEGORY_EMOJI[q.category]} {CATEGORY_LABEL[q.category]}
+          </span>
+          <span className="tag">{state.qIndex + 1}/{round.questions.length}</span>
+          {round.kind === 'chain' && (
+            <>
+              <span className="streak">🔥 streak {state.chainStreak}</span>
+              <span className="tag" style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}>pot {state.chainPot}</span>
+              <span className="tag">next {CHAIN_LADDER[Math.min(state.chainStreak, CHAIN_LADDER.length - 1)]}</span>
+            </>
+          )}
+          {round.kind === 'rapid' && (
+            <span className="tag" style={{ borderColor: teamOf(state.rapidTeam).colour, color: teamOf(state.rapidTeam).colour }}>
+              {teamOf(state.rapidTeam).name} · {state.rapidScored[state.rapidTeam]} correct
             </span>
-            <span className="tag">next {CHAIN_LADDER[Math.min(state.chainStreak, CHAIN_LADDER.length - 1)]}</span>
+          )}
+        </div>
+
+        {/* The question itself, on a pale sheet so it always reads over art. */}
+        <div className="question-card">
+          <h2 className={`question ${questionMedia ? 'question-sm' : ''}`}>{q.prompt}</h2>
+          {revealed && (
+            <div style={{ marginTop: 18 }}>
+              <div className="answer-reveal">{q.answer}</div>
+              {q.meta && <p className="answer-meta">{q.meta}</p>}
+            </div>
+          )}
+        </div>
+
+        {/*
+          The clock rides on the corner of the picture rather than sitting
+          under it. Stacked, the two of them together left no room for the
+          buzzers on a laptop screen, and a countdown pinned to the thing it
+          is counting down is the clearer picture anyway. Rounds scored
+          against a bar keep the bar in flow, full width, where it belongs.
+        */}
+        {questionMedia && (
+          <div className="stage-media">
+            {questionMedia}
+            {ringOnMedia && (
+              <div className="stage-clock">
+                <TimerRing left={state.timeLeft} total={round.seconds!} />
+              </div>
+            )}
           </div>
         )}
 
-        {round.kind === 'rapid' && (
-          <p className="eyebrow" style={{ color: teamOf(state.rapidTeam).colour }}>
-            {teamOf(state.rapidTeam).name} · {state.rapidScored[state.rapidTeam]} correct
-          </p>
-        )}
-
-        <h2 className={`question ${questionMedia ? 'question-sm' : ''}`}>{q.prompt}</h2>
-
-        {questionMedia}
-
-        {round.seconds && !revealed && (
-          round.kind === 'rapid' || round.kind === 'mcq'
-            ? <TimerBar left={state.timeLeft} total={round.seconds} />
-            : <TimerRing left={state.timeLeft} total={round.seconds} />
+        {showClock && !ringOnMedia && (
+          barClock
+            ? <TimerBar left={state.timeLeft} total={round.seconds!} />
+            : <TimerRing left={state.timeLeft} total={round.seconds!} />
         )}
 
         {state.hintShown && q.hint && !revealed && (
           <p className="hint-box">💡 {q.hint}</p>
         )}
 
-        {revealed && (
-          <div>
-            <div className="answer-reveal display">{q.answer}</div>
-            {q.meta && <p className="answer-meta">{q.meta}</p>}
-          </div>
-        )}
-
         {/* Type it out — harder, and worth more. */}
         {showChoices && config.answerMode === 'typed' && !revealed && (() => {
           // Whoever is up: the team whose turn it is, or the next one still to answer.
           const entering = turn ?? teams.find((t) => !state.picks[t]) ?? null;
-          if (!entering) return <p className="muted">Both answers are in…</p>;
+          if (!entering) return <p className="stage-note">Both answers are in…</p>;
           return (
             <form
               className="typed-answer"
@@ -554,9 +596,9 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
                 setTyped('');
               }}
             >
-              <label className="label" style={{ color: teamOf(entering).colour }}>
+              <span className="label" style={{ color: teamOf(entering).colour }}>
                 {config.solo ? 'Your answer' : `${teamOf(entering).name} — type it`}
-              </label>
+              </span>
               <div className="row gap-sm">
                 <input
                   className="input grow"
@@ -568,7 +610,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
                   onChange={(e) => setTyped(e.target.value)}
                   style={{ borderColor: teamOf(entering).colour }}
                 />
-                <button className="btn btn-primary" type="submit" disabled={!typed.trim()}>Enter</button>
+                <button className="btn btn-gold" type="submit" disabled={!typed.trim()}>Enter</button>
               </div>
               <p className="dim" style={{ fontSize: '0.8em' }}>
                 Spelling is forgiven — close enough counts.
@@ -633,7 +675,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
 
         {/* Who has answered, without saying what they answered. */}
         {lockIn && !revealed && teams.some((t) => state.picks[t]) && (
-          <p className="muted" style={{ fontSize: '0.9em' }}>
+          <p className="stage-note">
             {teams.filter((t) => state.picks[t]).map((t) => (
               <b key={t} style={{ color: teamOf(t).colour }}>{teamOf(t).name} locked in. </b>
             ))}
@@ -642,7 +684,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
         )}
 
         {lockIn && !revealed && (
-          <p className="muted" style={{ fontSize: '0.86em' }}>
+          <p className="stage-note">
             {config.solo ? (
               <>Press <span className="kbd">1</span>–<span className="kbd">4</span> to answer</>
             ) : turn ? (
@@ -663,9 +705,9 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
         {config.hosted && BUZZ_ROUNDS.includes(round.kind) && !revealed && buzzers}
 
         {round.kind === 'wager' && !revealed && config.hosted && (
-          <div className="row gap wrap-w" style={{ justifyContent: 'center' }}>
+          <div className="final-scores">
             {teams.map((id) => (
-              <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour, textAlign: 'center', minWidth: 210 }}>
+              <div key={id} className="final-card" style={{ ['--c' as string]: teamOf(id).colour, minWidth: 210 }}>
                 <div className="team-meta">{teamOf(id).name} bet {state.wagers[id]}</div>
                 <div className="row gap-sm" style={{ justifyContent: 'center', marginTop: 12 }}>
                   <button className="btn btn-good btn-sm" disabled={state.wagerResult[id] !== undefined}
@@ -689,7 +731,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
   const playerBar = !config.hosted && round?.kind === 'chain'
     && !['game-end', 'round-intro', 'round-end'].includes(state.phase) && (
     <div className="hostbar">
-      <div className="wrap hostbar-inner">
+      <div className="hostbar-inner">
         <span className="eyebrow" style={{ color: teamOf(state.chainTeam).colour }}>
           {config.solo ? 'Your chain' : `${teamOf(state.chainTeam).name}'s chain`}
         </span>
@@ -698,7 +740,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
           🏦 Bank {state.chainPot || ''}
         </button>
         {state.phase === 'revealed' && (
-          <button className="btn btn-primary" onClick={() => dispatch({ type: 'next' })}>
+          <button className="btn btn-gold" onClick={() => dispatch({ type: 'next' })}>
             {state.chainPot > 0 ? 'Risk it →' : 'Next →'}
           </button>
         )}
@@ -710,7 +752,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
 
   const hostBar = config.hosted && !['game-end', 'round-intro', 'wager-set'].includes(state.phase) && (
     <div className="hostbar">
-      <div className="wrap hostbar-inner">
+      <div className="hostbar-inner">
         {state.phase === 'buzzed' && state.buzzed && (
           <>
             <span className="eyebrow" style={{ color: teamOf(state.buzzed).colour }}>
@@ -763,7 +805,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
         )}
 
         {state.phase === 'revealed' && (
-          <button className="btn btn-primary" onClick={() => dispatch({ type: 'next' })}>
+          <button className="btn btn-gold" onClick={() => dispatch({ type: 'next' })}>
             Next <span className="kbd">Space</span>
           </button>
         )}
@@ -784,14 +826,57 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
     </div>
   );
 
+  /* ------------------------------------------------------------- rail */
+
+  const rails: RailItem[] = [
+    { key: 'exit', icon: 'close', label: 'Quit the game', onGo: onExit },
+    { key: 'round', icon: round ? ROUND_INFO[round.kind].emoji : 'trophy', label: round ? ROUND_INFO[round.kind].title : 'Round' },
+    ...(config.hosted ? [
+      {
+        key: 'hint',
+        icon: 'bulb',
+        label: 'Show the hint',
+        disabled: !(state.phase === 'question' && q?.hint && !state.hintShown),
+        onGo: () => { sfx.hint(); dispatch({ type: 'hint' }); },
+      },
+      {
+        key: 'skip',
+        icon: 'skip',
+        label: 'Skip this round',
+        disabled: state.phase === 'game-end',
+        onGo: () => dispatch({ type: 'skip-round' }),
+      },
+    ] : []),
+  ];
+
   /* ------------------------------------------------------------ render */
 
   return (
-    <div className="arena">
-      {Scoreboard}
-      {stage}
-      {hostBar}
-      {playerBar}
+    <Screen theme={themeVars(theme)}>
+      <Hud>
+        <Wordmark
+          jp={theme.jp}
+          en={round ? ROUND_INFO[round.kind].title : 'Quiz Arena'}
+        />
+        <div className="hud-right">
+          <span className="hud-pill">
+            Round {Math.min(state.roundIndex + 1, rounds.length)} / {rounds.length}
+          </span>
+          {round?.points ? <span className="hud-pill" data-on="true">{round.points} pts</span> : null}
+        </div>
+      </Hud>
+
+      <Rail items={rails} active="round" />
+
+      <div className="arena-body">
+        {/* The round's name in Japanese, set into the corner. Decorative, so it
+            is kept out of the accessibility tree rather than read aloud. */}
+        <span className="round-jp" aria-hidden="true">{theme.jp}</span>
+        {Scoreboard}
+        {stage}
+        {hostBar}
+        {playerBar}
+      </div>
 
       {state.banner.team && (
         <BuzzBanner
@@ -802,7 +887,7 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
       )}
       <Verdict kind={state.fx.kind} nonce={state.fx.nonce} />
       <Toast toast={state.toast} />
-      <Confetti nonce={confetti} colours={[teamOf('a').colour, teamOf('b').colour, '#ffc53d', '#ffffff']} />
+      <Confetti nonce={confetti} colours={[teamOf('a').colour, teamOf('b').colour, theme.accent, '#ffffff']} />
 
       <OnlineRoom
         teams={{
@@ -816,7 +901,6 @@ export default function Arena({ config, onExit }: { config: GameConfig; onExit: 
           else dispatch({ type: 'lock', team, choice: action.choice });
         }}
       />
-      <button className="exit-btn" onClick={onExit} aria-label="Exit to menu" title="Exit">×</button>
-    </div>
+    </Screen>
   );
 }

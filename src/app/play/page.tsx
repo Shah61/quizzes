@@ -5,6 +5,7 @@ import type { TeamId } from '@/game/types';
 import { CATEGORY_EMOJI, CATEGORY_LABEL } from '@/game/types';
 import { useGameClient } from '@/net/buzzers';
 import { OpeningPlayer, RevealImage, TimerBar } from '@/components/bits';
+import { Hud, Icon, Screen, Wordmark } from '@/components/Shell';
 import { primeAudio, sfx } from '@/game/sfx';
 
 function PlayScreen() {
@@ -32,11 +33,13 @@ function PlayScreen() {
 
   if (status !== 'joined') {
     return (
-      <div className="shell center" style={{ padding: 20 }}>
-        <div className="panel panel-lg stack gap" style={{ padding: 26, width: '100%', maxWidth: 420 }}>
+      <Screen hero={false}>
+        <Hud><Wordmark /></Hud>
+        <div className="screen-main" style={{ paddingLeft: 'var(--gut)', justifyContent: 'center', alignItems: 'center' }}>
+        <div className="card panel stack gap" style={{ width: '100%', maxWidth: 420 }}>
           <div>
-            <h1 className="display" style={{ fontSize: '2.1rem' }}>Join the game</h1>
-            <p className="muted" style={{ fontSize: '0.92em', marginTop: 6 }}>
+            <h1 className="round-intro-title" style={{ fontSize: '2.1rem' }}>Join the game</h1>
+            <p className="card-note" style={{ marginTop: 6 }}>
               Ask the host for the four-letter room code. Everything plays on your own screen.
             </p>
           </div>
@@ -71,7 +74,7 @@ function PlayScreen() {
 
           <button className="btn btn-primary btn-lg" disabled={code.length !== 4 || status === 'connecting'}
             onClick={() => { primeAudio(); join(code, name || 'Player', team); }}>
-            {status === 'connecting' ? 'Connecting…' : 'Join the game'}
+            {status === 'connecting' ? 'Connecting…' : 'Join the game →'}
           </button>
 
           {status === 'error' && (
@@ -81,7 +84,8 @@ function PlayScreen() {
             </p>
           )}
         </div>
-      </div>
+        </div>
+      </Screen>
     );
   }
 
@@ -89,13 +93,18 @@ function PlayScreen() {
 
   if (!snapshot) {
     return (
-      <div className="shell center" style={{ padding: 20, textAlign: 'center' }}>
-        <div className="stack gap center">
-          <h2 className="display" style={{ fontSize: '2rem', color: teamColour(team) }}>{teamName(team)}</h2>
-          <p className="muted">You are in. Waiting for the host to start…</p>
-          <button className="btn btn-ghost btn-sm" onClick={leave}>Leave</button>
+      <Screen hero={false}>
+        <Hud><Wordmark /></Hud>
+        <div className="screen-main" style={{ paddingLeft: 'var(--gut)', justifyContent: 'center', alignItems: 'center' }}>
+          <div className="stack gap center" style={{ textAlign: 'center' }}>
+            <h2 className="winner-name" style={{ fontSize: 'clamp(2.2rem,12vw,4rem)', ['--c' as string]: teamColour(team) }}>
+              {teamName(team)}
+            </h2>
+            <p className="muted">You are in. Waiting for the host to start…</p>
+            <button className="btn btn-ghost btn-sm" onClick={leave}>Leave</button>
+          </div>
         </div>
-      </div>
+      </Screen>
     );
   }
 
@@ -112,6 +121,12 @@ function PlayScreen() {
           <span className="play-team-score">{s.scores[id]}</span>
         </div>
       ))}
+      {/* In the row rather than floating over it: pinned to the corner this
+          sat squarely on top of the second team's score. */}
+      <button className="icon-btn" onClick={leave} aria-label="Leave the room">
+        <Icon name="close" size={18} />
+        <span className="corner-label">Leave the room</span>
+      </button>
     </div>
   );
 
@@ -122,7 +137,7 @@ function PlayScreen() {
     body = (
       <div className="stack gap center" style={{ textAlign: 'center' }}>
         <p className="eyebrow">Final result</p>
-        <h1 className="display" style={{ fontSize: 'clamp(2.4rem,12vw,4rem)', color: s.winner === 'tie' ? '#fff' : teamColour(s.winner as TeamId) }}>
+        <h1 className="winner-name" style={{ ['--c' as string]: s.winner === 'tie' ? 'var(--accent)' : teamColour(s.winner as TeamId) }}>
           {s.winner === 'tie' ? "It's a tie" : `${teamName(s.winner as TeamId)} wins`}
         </h1>
         {s.winner !== 'tie' && <p className="muted">{won ? 'That is you. Well played.' : 'Better luck next round.'}</p>}
@@ -132,16 +147,16 @@ function PlayScreen() {
     body = (
       <div className="stack gap center" style={{ textAlign: 'center' }}>
         <p className="eyebrow">Round {s.roundIndex + 1} complete</p>
-        <h2 className="display" style={{ fontSize: '2rem' }}>{s.roundTitle}</h2>
+        <h2 className="geo-name">{s.roundTitle}</h2>
         <p className="muted">Waiting for the next round…</p>
       </div>
     );
   } else if (s.view === 'round-intro' || s.view === 'lobby') {
     body = (
       <div className="stack gap center" style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '3.4rem', lineHeight: 1 }}>{s.roundEmoji}</div>
+        <div className="round-intro-emoji">{s.roundEmoji}</div>
         <p className="eyebrow">Round {s.roundIndex + 1} of {s.roundTotal}</p>
-        <h2 className="display" style={{ fontSize: 'clamp(2rem,9vw,3rem)' }}>{s.roundTitle}</h2>
+        <h2 className="geo-name">{s.roundTitle}</h2>
         <p className="muted" style={{ maxWidth: '34ch' }}>{s.roundBlurb}</p>
         <p className="dim" style={{ fontSize: '0.9em' }}>Get ready…</p>
       </div>
@@ -158,12 +173,12 @@ function PlayScreen() {
         {s.voice ? (
           <div className="voice-brief">
             <span className="eyebrow">Perform</span>
-            <h2 className="display voice-character">{s.voice.character}</h2>
+            <h2 className="voice-character">{s.voice.character}</h2>
             {s.voice.from !== 'generic' && <p className="voice-from">{s.voice.from}</p>}
             <p className="voice-direction">{s.voice.direction}</p>
           </div>
         ) : (
-          <h2 className="question question-sm">{s.prompt}</h2>
+          <div className="question-card"><h2 className="question question-sm">{s.prompt}</h2></div>
         )}
 
         {s.canVote && (
@@ -208,14 +223,14 @@ function PlayScreen() {
         {s.hint && !revealed && <p className="hint-box">💡 {s.hint}</p>}
 
         {s.view === 'buzzed' && s.buzzed && (
-          <p className="display" style={{ fontSize: '1.9rem', color: teamColour(s.buzzed) }}>
+          <p className="geo-name" style={{ fontSize: '1.9rem', color: teamColour(s.buzzed) }}>
             {teamName(s.buzzed)} buzzed!
           </p>
         )}
 
         {revealed && (
           <div>
-            <div className="answer-reveal display" style={{ fontSize: 'clamp(1.6rem,7vw,2.6rem)' }}>{s.answer}</div>
+            <div className="answer-reveal" style={{ fontSize: 'clamp(1.6rem,7vw,2.6rem)' }}>{s.answer}</div>
             {s.meta && <p className="answer-meta">{s.meta}</p>}
             {teamPick && (
               <p style={{ marginTop: 8, fontWeight: 700, color: teamPick === s.answer ? 'var(--good)' : 'var(--bad)' }}>
@@ -311,9 +326,10 @@ function PlayScreen() {
 
   return (
     <div className="play-shell">
+      <div className="screen-ground" aria-hidden="true" />
+      <div className="screen-vignette" aria-hidden="true" />
       {header}
       <div className="play-body">{body}</div>
-      <button className="exit-btn" onClick={leave} aria-label="Leave the room" title="Leave">×</button>
     </div>
   );
 }

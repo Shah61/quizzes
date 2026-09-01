@@ -1,5 +1,14 @@
 'use client';
 
+/**
+ * Setting the game up.
+ *
+ * Same anatomy as the home screen — ground, rail, top bar, the figure standing
+ * behind it — with the form itself in glass cards that scroll under a fixed
+ * header. Two columns once there is room, because a twelve-round line-up and
+ * thirteen topics in one column is a mile of scrolling.
+ */
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AnswerMode, Category, GameConfig, RoundKind, Team } from '@/game/types';
 import { CATEGORY_EMOJI, CATEGORY_LABEL, ROUND_INFO, SOLO_ROUNDS, TEAM_COLOURS } from '@/game/types';
@@ -10,6 +19,8 @@ import {
 } from '@/game/mimic-refs';
 import { sfx } from '@/game/sfx';
 import { hasStreetView } from '@/game/maps';
+import { ROUND_THEME } from '@/game/theme';
+import { Cta, Hud, Rail, Screen, Wordmark, type RailItem } from './Shell';
 
 const ALL_CATEGORIES: Category[] = [
   'anime', 'minecraft', 'terraria', 'marvel', 'general', 'songs', 'malaysia',
@@ -102,211 +113,249 @@ export default function Setup({ onStart, onBack, onStudio, solo = false }: {
     onStart({ teams, categories, rounds: chosen, hosted, solo, answerMode, questionsPerRound: perRound, mimicSources });
   };
 
+  const rails: RailItem[] = [
+    { key: 'back', icon: 'back', label: 'Back to the menu', onGo: () => { sfx.select(); onBack(); } },
+    { key: 'setup', icon: solo ? 'target' : 'swords', label: solo ? 'Set your run up' : 'Set the game up' },
+    { key: 'studio', icon: 'scissors', label: 'Clip Studio', onGo: () => { sfx.select(); onStudio(); } },
+  ];
+
+  const minutes = Math.max(1, Math.round((effectiveRounds.length * perRound * 40) / 60));
+
   return (
-    <div className="shell">
-      <div className="wrap">
-        <div className="topbar">
-          <button className="btn btn-ghost btn-sm" onClick={onBack}>← Back</button>
-          <h2 className="display" style={{ fontSize: '1.5rem' }}>{solo ? 'Set up your solo run' : 'Set up the game'}</h2>
+    <Screen>
+      <Hud>
+        <Wordmark jp={solo ? 'ソロラン' : 'アリーナ'} en={solo ? 'Solo run' : 'Arena'} />
+        <div className="hud-right">
+          <span className="hud-pill">{categories.length} topics</span>
+          <span className="hud-pill">{effectiveRounds.length} rounds · ~{minutes} min</span>
         </div>
+      </Hud>
 
-        <div className="setup-grid" style={{ paddingTop: 22 }}>
-          {/* ------------------------------------------------ teams */}
-          <section className="panel panel-lg" style={{ padding: 24 }}>
-            <p className="label" style={{ marginBottom: 16 }}>{solo ? 'You' : 'The two teams'}</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 22 }}>
-              {([
-                { name: nameA, setName: setNameA, colour: colourA, setColour: setColourA, side: 'A' },
-                ...(solo ? [] : [{ name: nameB, setName: setNameB, colour: colourB, setColour: setColourB, side: 'B' }]),
-              ]).map((t) => (
-                <div key={t.side} className="field">
-                  <span className="label">{solo ? 'Your name' : `Team ${t.side}`}</span>
-                  <input
-                    className="input"
-                    value={t.name}
-                    maxLength={22}
-                    onChange={(e) => t.setName(e.target.value)}
-                    style={{ borderColor: t.colour, fontWeight: 700 }}
-                  />
-                  <div className="swatches">
-                    {TEAM_COLOURS.map((c) => (
-                      <button
-                        key={c}
-                        className="swatch"
-                        style={{ background: c }}
-                        data-on={t.colour === c}
-                        aria-label={`Colour ${c}`}
-                        onClick={() => { sfx.select(); t.setColour(c); }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
+      <Rail items={rails} active="setup" />
 
-          {/* ------------------------------------------------ host mode */}
-          <section className="panel panel-lg" style={{ padding: 24, display: solo ? 'none' : undefined }}>
-            <p className="label" style={{ marginBottom: 14 }}>Who runs the game?</p>
-            <div className="seg" role="group">
-              <button data-on={hosted} onClick={() => { sfx.select(); setHosted(true); }}>🎙️ I am the host</button>
-              <button data-on={!hosted} onClick={() => { sfx.select(); setHosted(false); }}>🤖 No host needed</button>
-            </div>
-            <p className="muted" style={{ marginTop: 14, fontSize: '0.9em', maxWidth: '62ch' }}>
-              {hosted
-                ? 'You get the full control bar: mark answers right or wrong, drop hints, award or remove points, pause the clock and skip anything you do not like.'
-                : 'Every round becomes multiple choice and the screen scores it — buzzers, rapid fire, the chain and the wager included. Team A answers with keys 1–4, Team B with 7–0, or just tap.'}
-            </p>
-          </section>
-
-          {/* ------------------------------------------------ categories */}
-          <section className="panel panel-lg" style={{ padding: 24 }}>
-            <div className="row wrap-w gap-sm" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
-              <p className="label">Topics</p>
-              <button className="btn btn-ghost btn-sm"
-                onClick={() => { sfx.select(); setCategories(categories.length === ALL_CATEGORIES.length ? [] : ALL_CATEGORIES); }}>
-                {categories.length === ALL_CATEGORIES.length ? 'Clear all' : 'Select all'}
-              </button>
-            </div>
-            <div className="row wrap-w gap-sm">
-              {ALL_CATEGORIES.map((c) => (
-                <button key={c} className="chip" data-on={categories.includes(c)}
-                  onClick={() => toggle(c, setCategories)}>
-                  <span>{CATEGORY_EMOJI[c]}</span>
-                  <span>{CATEGORY_LABEL[c]}</span>
-                  <span className="chip-count">{sizes[c]}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* ------------------------------------------------ rounds */}
-          <section className="panel panel-lg" style={{ padding: 24 }}>
-            <p className="label" style={{ marginBottom: 6 }}>Rounds &amp; running order</p>
-            <p className="muted" style={{ fontSize: '0.88em', marginBottom: 16 }}>
+      <div className="screen-main">
+        <div className="sheet">
+          <div className="sheet-head">
+            <h1 className="sheet-title">{solo ? 'Your solo run' : 'Set up the show'}</h1>
+            <p className="sheet-lede">
               {solo
-                ? 'Pick the rounds you want. They play in this order. Voice Battle needs two teams and a vote, so it sits this one out.'
-                : hosted
-                  ? 'Pick the rounds you want. They play in this order.'
-                  : 'Pick the rounds you want — the screen runs and scores all of them.'}
+                ? 'Pick your topics and the rounds you want. Everything is scored on screen.'
+                : 'Two teams, your topics, your running order. The rounds play in the order you pick them.'}
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 10 }}>
-              {ALL_ROUNDS.map((r) => {
-                const info = ROUND_INFO[r];
-                const usable = allowed(r);
-                const on = rounds.includes(r) && usable;
-                return (
-                  <button
-                    key={r}
-                    className="choice"
-                    data-state={on ? 'correct' : usable ? undefined : 'muted'}
-                    disabled={!usable}
-                    onClick={() => toggle(r, setRounds)}
-                    style={{ alignItems: 'flex-start', textAlign: 'left' }}
-                  >
-                    <span className="choice-key">{info.emoji}</span>
-                    <span>
-                      <strong style={{ display: 'block' }}>{info.title}</strong>
-                      <span className="muted" style={{ fontSize: '0.82em', fontWeight: 400 }}>{info.blurb}</span>
-                      {/* A greyed-out card with no reason given is just baffling —
-                          say what is missing and where to fix it. */}
-                      {!usable && (
-                        <span className="round-why">
-                          {r === 'street'
-                            ? 'Needs a Google Maps key with the Maps Embed API enabled — see .env.example'
-                            : 'Needs two teams, so it sits out a solo run'}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          </div>
 
-          {/* ------------------------------------------------ mimic sources */}
-          {mimicOn && (
-            <section className="panel panel-lg" style={{ padding: 24 }}>
-              <div className="row wrap-w gap-sm" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-                <p className="label">🔊 What the Mimic round plays</p>
-                <button className="btn btn-ghost btn-sm" onClick={() => { sfx.select(); onStudio(); }}>
-                  ✂️ Clip Studio
+          <div className="sheet-body">
+            {/* ---------------------------------------------------- teams */}
+            <section className="card panel">
+              <div className="card-head">
+                <p className="label">{solo ? 'You' : 'The two teams'}</p>
+              </div>
+              <div className="grid-auto">
+                {([
+                  { name: nameA, setName: setNameA, colour: colourA, setColour: setColourA, side: 'A' },
+                  ...(solo ? [] : [{ name: nameB, setName: setNameB, colour: colourB, setColour: setColourB, side: 'B' }]),
+                ]).map((t) => (
+                  <div key={t.side} className="field">
+                    <span className="label">{solo ? 'Your name' : `Team ${t.side}`}</span>
+                    <input
+                      className="input"
+                      value={t.name}
+                      maxLength={22}
+                      onChange={(e) => t.setName(e.target.value)}
+                      style={{ borderColor: t.colour, fontWeight: 700 }}
+                    />
+                    <div className="swatches">
+                      {TEAM_COLOURS.map((c) => (
+                        <button
+                          key={c}
+                          className="swatch"
+                          style={{ background: c }}
+                          data-on={t.colour === c}
+                          aria-label={`Colour ${c}`}
+                          onClick={() => { sfx.select(); t.setColour(c); }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* ------------------------------------------------ host mode */}
+            {!solo && (
+              <section className="card panel">
+                <div className="card-head"><p className="label">Who runs the game?</p></div>
+                <div className="seg" role="group">
+                  <button data-on={hosted} onClick={() => { sfx.select(); setHosted(true); }}>🎙️ I am the host</button>
+                  <button data-on={!hosted} onClick={() => { sfx.select(); setHosted(false); }}>🤖 No host needed</button>
+                </div>
+                <p className="card-note" style={{ marginTop: 14 }}>
+                  {hosted
+                    ? 'You get the full control bar: mark answers right or wrong, drop hints, award or remove points, pause the clock and skip anything you do not like.'
+                    : 'Every round becomes multiple choice and the screen scores it — buzzers, rapid fire, the chain and the wager included. Team A answers with keys 1–4, Team B with 7–0, or just tap.'}
+                </p>
+              </section>
+            )}
+
+            {/* ----------------------------------------------- categories */}
+            <section className="card panel span-2">
+              <div className="card-head">
+                <p className="label">Topics</p>
+                <button className="btn btn-ghost btn-sm"
+                  onClick={() => { sfx.select(); setCategories(categories.length === ALL_CATEGORIES.length ? [] : ALL_CATEGORIES); }}>
+                  {categories.length === ALL_CATEGORIES.length ? 'Clear all' : 'Select all'}
                 </button>
               </div>
-              <p className="muted" style={{ fontSize: '0.88em', marginBottom: 16 }}>
-                Real scene audio and anime openings work exactly like the built-in sounds —
-                same countdown, one shot each, same scoring. Cut your own in the Clip Studio.
-              </p>
               <div className="row wrap-w gap-sm">
-                {ALL_MIMIC_SOURCES.map((s) => {
-                  const info = MIMIC_SOURCE_INFO[s];
-                  const empty = mimicSizes[s] === 0;
+                {ALL_CATEGORIES.map((c) => (
+                  <button key={c} className="chip" data-on={categories.includes(c)}
+                    onClick={() => toggle(c, setCategories)}>
+                    <span>{CATEGORY_EMOJI[c]}</span>
+                    <span>{CATEGORY_LABEL[c]}</span>
+                    <span className="chip-count">{sizes[c]}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {/* --------------------------------------------------- rounds */}
+            <section className="card panel span-2">
+              <div className="card-head">
+                <p className="label">Rounds &amp; running order</p>
+                <span className="chip-count">{effectiveRounds.length} picked</span>
+              </div>
+              <p className="card-note" style={{ marginBottom: 16 }}>
+                {solo
+                  ? 'Pick the rounds you want. They play in this order. Voice Battle needs two teams and a vote, so it sits this one out.'
+                  : hosted
+                    ? 'Pick the rounds you want. They play in this order.'
+                    : 'Pick the rounds you want — the screen runs and scores all of them.'}
+              </p>
+              <div className="grid-auto">
+                {ALL_ROUNDS.map((r) => {
+                  const info = ROUND_INFO[r];
+                  const usable = allowed(r);
+                  const on = rounds.includes(r) && usable;
                   return (
-                    <button key={s} className="chip" data-on={mimicSources.includes(s) && !empty}
-                      disabled={empty}
-                      title={empty ? 'Nothing here yet' : info.blurb}
-                      onClick={() => toggle(s, setMimicSources)}>
-                      <span>{info.emoji}</span>
-                      <span>{info.label}</span>
-                      <span className="chip-count">{mimicSizes[s]}</span>
+                    <button
+                      key={r}
+                      className="round-choice"
+                      data-on={on}
+                      disabled={!usable}
+                      onClick={() => toggle(r, setRounds)}
+                      // Each card wears the round's own colour and face, so the
+                      // running order reads as a line-up rather than a list.
+                      style={{
+                        ['--accent' as string]: ROUND_THEME[r].accent,
+                        ['--accent-2' as string]: ROUND_THEME[r].accent2,
+                        ['--round-font' as string]: ROUND_THEME[r].font,
+                      }}
+                    >
+                      <span className="round-choice-emoji">{info.emoji}</span>
+                      <span className="grow">
+                        <strong className="round-choice-title">{info.title}</strong>
+                        <span className="round-choice-blurb">{info.blurb}</span>
+                        {/* A greyed-out card with no reason given is just baffling —
+                            say what is missing and where to fix it. */}
+                        {!usable && (
+                          <span className="round-why">
+                            {r === 'street'
+                              ? 'Needs a Google Maps key with the Maps Embed API enabled — see .env.example'
+                              : 'Needs two teams, so it sits out a solo run'}
+                          </span>
+                        )}
+                      </span>
                     </button>
                   );
                 })}
               </div>
-              <p className="dim" style={{ fontSize: '0.85em', marginTop: 12 }}>
-                {mimicTotal > 0
-                  ? `${mimicTotal.toLocaleString()} sounds in the pool.`
-                  : 'Pick at least one source, or the round has nothing to play.'}
+            </section>
+
+            {/* -------------------------------------------- mimic sources */}
+            {mimicOn && (
+              <section className="card panel span-2">
+                <div className="card-head">
+                  <p className="label">🔊 What the Mimic round plays</p>
+                  <button className="btn btn-ghost btn-sm" onClick={() => { sfx.select(); onStudio(); }}>
+                    ✂️ Clip Studio
+                  </button>
+                </div>
+                <p className="card-note" style={{ marginBottom: 16 }}>
+                  Real scene audio and anime openings work exactly like the built-in sounds —
+                  same countdown, one shot each, same scoring. Cut your own in the Clip Studio.
+                </p>
+                <div className="row wrap-w gap-sm">
+                  {ALL_MIMIC_SOURCES.map((s) => {
+                    const info = MIMIC_SOURCE_INFO[s];
+                    const empty = mimicSizes[s] === 0;
+                    return (
+                      <button key={s} className="chip" data-on={mimicSources.includes(s) && !empty}
+                        disabled={empty}
+                        title={empty ? 'Nothing here yet' : info.blurb}
+                        onClick={() => toggle(s, setMimicSources)}>
+                        <span>{info.emoji}</span>
+                        <span>{info.label}</span>
+                        <span className="chip-count">{mimicSizes[s]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="dim" style={{ fontSize: '0.85em', marginTop: 12 }}>
+                  {mimicTotal > 0
+                    ? `${mimicTotal.toLocaleString()} sounds in the pool.`
+                    : 'Pick at least one source, or the round has nothing to play.'}
+                </p>
+              </section>
+            )}
+
+            {/* ---------------------------------------------- answer mode */}
+            <section className="card panel">
+              <div className="card-head"><p className="label">How answers are given</p></div>
+              <div className="seg" role="group">
+                <button data-on={answerMode === 'choices'} onClick={() => { sfx.select(); setAnswerMode('choices'); }}>
+                  🔘 Four options
+                </button>
+                <button data-on={answerMode === 'typed'} onClick={() => { sfx.select(); setAnswerMode('typed'); }}>
+                  ⌨️ Type it out
+                </button>
+              </div>
+              <p className="card-note" style={{ marginTop: 14 }}>
+                {answerMode === 'choices'
+                  ? 'Tap or key one of four. Friendly, fast, and everyone can join in.'
+                  : 'No options — produce the answer from nothing, for half as many points again. Spelling, spacing and word order are forgiven, so “shingeki” takes Attack on Titan.'}
               </p>
             </section>
-          )}
 
-          {/* ------------------------------------------------ answer mode */}
-          <section className="panel panel-lg" style={{ padding: 24 }}>
-            <p className="label" style={{ marginBottom: 14 }}>How answers are given</p>
-            <div className="seg" role="group">
-              <button data-on={answerMode === 'choices'} onClick={() => { sfx.select(); setAnswerMode('choices'); }}>
-                🔘 Four options
-              </button>
-              <button data-on={answerMode === 'typed'} onClick={() => { sfx.select(); setAnswerMode('typed'); }}>
-                ⌨️ Type it out
-              </button>
+            {/* --------------------------------------------------- length */}
+            <section className="card panel">
+              <div className="card-head"><p className="label">Questions per round</p></div>
+              <div className="seg">
+                {[3, 5, 10, 20, 50, 100].map((n) => (
+                  <button key={n} data-on={perRound === n} onClick={() => { sfx.select(); setPerRound(n); }}>{n}</button>
+                ))}
+              </div>
+              <p className="card-note" style={{ marginTop: 14 }}>
+                About {minutes} minutes across {effectiveRounds.length} round{effectiveRounds.length === 1 ? '' : 's'}.
+              </p>
+            </section>
+
+            <div className="sheet-footer span-2">
+              <Cta className="btn-lg" onClick={start} disabled={!ready} arrow="→">
+                {solo ? 'Start playing' : 'Start the show'}
+              </Cta>
+              {!ready && (
+                <p className="muted" style={{ textAlign: 'center', fontSize: '0.88em' }}>
+                  {!banksIn
+                    ? 'Fetching the question bank…'
+                    : !mimicReady
+                      ? 'The Mimic round needs at least one sound source.'
+                      : 'Pick at least one topic and one round to continue.'}
+                </p>
+              )}
             </div>
-            <p className="muted" style={{ marginTop: 14, fontSize: '0.9em', maxWidth: '62ch' }}>
-              {answerMode === 'choices'
-                ? 'Tap or key one of four. Friendly, fast, and everyone can join in.'
-                : 'No options — produce the answer from nothing, for half as many points again. Spelling, spacing and word order are forgiven, so “shingeki” takes Attack on Titan. Best on your own or online, where each person answers on their own screen.'}
-            </p>
-          </section>
-
-          {/* ------------------------------------------------ length */}
-          <section className="panel panel-lg" style={{ padding: 24 }}>
-            <p className="label" style={{ marginBottom: 14 }}>Questions per round</p>
-            <div className="seg">
-              {[3, 5, 10, 20, 50, 100].map((n) => (
-                <button key={n} data-on={perRound === n} onClick={() => { sfx.select(); setPerRound(n); }}>{n}</button>
-              ))}
-            </div>
-            <p className="muted" style={{ marginTop: 12, fontSize: '0.9em' }}>
-              About {Math.max(1, Math.round((effectiveRounds.length * perRound * 40) / 60))} minutes
-              across {effectiveRounds.length} round{effectiveRounds.length === 1 ? '' : 's'}.
-            </p>
-          </section>
-
-          <button className="btn btn-primary btn-lg" onClick={start} disabled={!ready} style={{ justifySelf: 'center', marginTop: 8 }}>
-            {solo ? 'Start playing →' : 'Start the show →'}
-          </button>
-          {!ready && (
-            <p className="muted" style={{ textAlign: 'center', fontSize: '0.88em' }}>
-              {!banksIn
-                ? 'Fetching the question bank…'
-                : !mimicReady
-                  ? 'The Mimic round needs at least one sound source.'
-                  : 'Pick at least one topic and one round to continue.'}
-            </p>
-          )}
+          </div>
         </div>
       </div>
-    </div>
+    </Screen>
   );
 }

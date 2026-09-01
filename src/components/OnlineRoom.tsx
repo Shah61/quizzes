@@ -39,17 +39,21 @@ export default function OnlineRoom({
     return (
       <button
         className="phone-chip"
+        data-live={status === 'open'}
         onClick={() => { setOpen(true); if (status === 'idle') void openRoom(); }}
-        title="Let friends play from their own devices"
+        aria-label={status === 'open' && code ? `Online room ${code}` : 'Play online'}
+        title={status === 'open' && code
+          ? `Room ${code} — ${players.length} on their own device${players.length === 1 ? '' : 's'}`
+          : 'Let friends play from their own devices'}
       >
-        🌐 {status === 'open' && code ? code : 'Play online'}
+        🌐
         {players.length > 0 && <span className="phone-count">{players.length}</span>}
       </button>
     );
   }
 
   return (
-    <div className="phone-panel panel">
+    <div className="phone-panel">
       <div className="row gap-sm" style={{ justifyContent: 'space-between' }}>
         <span className="eyebrow">Online room</span>
         <button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>Hide</button>
@@ -66,9 +70,9 @@ export default function OnlineRoom({
 
       {status === 'open' && code && (
         <>
-          <div className="phone-code display">{code}</div>
-          <p className="muted" style={{ fontSize: '0.82em', lineHeight: 1.45 }}>
-            Friends open <b style={{ color: 'var(--text)' }}>{joinUrl.replace(/^https?:\/\//, '')}</b>{' '}
+          <div className="phone-code">{code}</div>
+          <p className="card-note" style={{ fontSize: '0.82em' }}>
+            Friends open <b style={{ color: 'var(--ink)' }}>{joinUrl.replace(/^https?:\/\//, '')}</b>{' '}
             and everything appears on their own screen.
           </p>
           <button className="btn btn-sm" onClick={() => navigator.clipboard?.writeText(joinUrl)}>

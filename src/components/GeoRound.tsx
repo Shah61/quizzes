@@ -108,7 +108,7 @@ export default function GeoRound({
           </span>
           <span className="geo-result-km tabular">{Math.round(r.km).toLocaleString()} km</span>
           <span className="geo-result-note muted">{describeDistance(r.km)}</span>
-          <span className="geo-result-score display">+{r.score}</span>
+          <span className="geo-result-score">+{r.score}</span>
         </div>
       ))}
     </div>
@@ -146,7 +146,7 @@ export default function GeoRound({
         {done && (
           <div className="geo-reveal">
             <span className="eyebrow">You were in</span>
-            <h2 className="display geo-name">{target.name}</h2>
+            <h2 className="geo-name">{target.name}</h2>
             <div className="geo-reveal-map">{theMap}</div>
             {resultsPanel}
             <button className="btn btn-primary btn-lg" onClick={() => onFinish(Object.fromEntries(results.map((r) => [r.team, r.score])))}>
@@ -187,7 +187,7 @@ export default function GeoRound({
         <span className="eyebrow">Where in the world is</span>
         <div className="row gap-sm" style={{ justifyContent: 'center', alignItems: 'center' }}>
           {target.flag && <img src={target.flag} alt="" className="geo-flag" />}
-          <h2 className="display geo-name">{target.name}</h2>
+          <h2 className="geo-name">{target.name}</h2>
         </div>
         {target.capital && <p className="muted">Capital: {target.capital}</p>}
       </div>

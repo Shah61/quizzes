@@ -1,27 +1,33 @@
 'use client';
 
 /**
- * The volume control, pinned in the corner of every screen.
+ * The sound control, pinned in the corner of every screen.
  *
  * A party game gets turned down mid-round — someone is talking, the openings
  * round is louder than the buzzers — so this stays reachable at all times
  * rather than living in a settings screen you would have to quit a game to
  * reach. The setting is saved, so the room's level survives a reload.
+ *
+ * It wears its level on its face rather than hiding behind a speaker glyph: in
+ * a room where everyone can see the screen, "is it muted or is the track just
+ * quiet?" is a question the control should already have answered.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   bumpVolume, getVolume, setVolume, subscribeVolume, toggleMute, type VolumeState,
 } from '@/game/volume';
+import { Icon, type IconName } from './Shell';
 
-const icon = (v: VolumeState) => {
-  if (v.muted || v.master === 0) return '🔇';
-  if (v.master < 0.34) return '🔈';
-  if (v.master < 0.7) return '🔉';
-  return '🔊';
+/** Four steps, so the icon says roughly how loud it is before you read it. */
+const iconFor = (v: VolumeState): IconName => {
+  if (v.muted || v.master === 0) return 'vol0';
+  if (v.master < 0.34) return 'vol1';
+  if (v.master < 0.7) return 'vol2';
+  return 'vol3';
 };
 
-export default function VolumeControl({ shifted = false }: { shifted?: boolean }) {
+export default function VolumeControl() {
   // Starts from the module defaults and syncs on mount: reading localStorage
   // during render would disagree with the server-rendered markup.
   const [vol, setVol] = useState<VolumeState>({ master: 0.8, effects: 0.7, muted: false });
@@ -64,54 +70,60 @@ export default function VolumeControl({ shifted = false }: { shifted?: boolean }
   }, []);
 
   const pct = useCallback((v: number) => `${Math.round(v * 100)}%`, []);
+  const reading = vol.muted ? 'Muted' : pct(vol.master);
 
   return (
-    <div className="volume" data-shifted={shifted} ref={wrapRef}>
-      <button
-        className="volume-btn"
-        onClick={() => setOpen((o) => !o)}
-        aria-label={`Volume ${vol.muted ? 'muted' : pct(vol.master)}`}
-        aria-expanded={open}
-        title="Volume (M to mute)"
-      >
-        {icon(vol)}
-      </button>
+    <div className="corner-controls" ref={wrapRef}>
+      <div className="volume">
+        <button
+          className="icon-btn volume-btn"
+          data-muted={vol.muted || vol.master === 0}
+          onClick={() => setOpen((o) => !o)}
+          aria-label={`Sound — ${reading}. Open the sound settings.`}
+          aria-expanded={open}
+        >
+          <Icon name={iconFor(vol)} size={19} />
+          <span className="volume-level" aria-hidden="true">{reading}</span>
+          {!open && <span className="corner-label">Sound &amp; volume · press M to mute</span>}
+        </button>
 
-      {open && (
-        <div className="volume-panel" role="group" aria-label="Volume">
-          <div className="volume-row">
-            <span className="label">Volume</span>
-            <span className="volume-value tabular">{vol.muted ? 'Muted' : pct(vol.master)}</span>
+        {open && (
+          <div className="volume-panel" role="group" aria-label="Sound settings">
+            <div className="volume-row">
+              <span className="label">Everything</span>
+              <span className="volume-value">{vol.muted ? 'Muted' : pct(vol.master)}</span>
+            </div>
+            <input
+              type="range" min={0} max={1} step={0.01}
+              value={vol.muted ? 0 : vol.master}
+              aria-label="Overall volume"
+              onChange={(e) => setVolume({ master: Number(e.target.value) })}
+            />
+
+            <div className="volume-row">
+              <span className="label">Beeps &amp; buzzers</span>
+              <span className="volume-value">{pct(vol.effects)}</span>
+            </div>
+            <input
+              type="range" min={0} max={1} step={0.01}
+              value={vol.effects}
+              aria-label="Effects volume"
+              onChange={(e) => setVolume({ effects: Number(e.target.value) })}
+            />
+            <p className="volume-hint">
+              Turn these down to keep the ticks and buzzers out of the way of the music.
+            </p>
+
+            <button className="btn btn-primary volume-mute" onClick={toggleMute}>
+              <Icon name={vol.muted ? 'vol3' : 'vol0'} size={17} />
+              {vol.muted ? 'Unmute' : 'Mute everything'}
+            </button>
+            <p className="volume-hint">
+              <b>M</b> mutes · <b>[</b> and <b>]</b> step the level
+            </p>
           </div>
-          <input
-            type="range" min={0} max={1} step={0.01}
-            value={vol.muted ? 0 : vol.master}
-            aria-label="Master volume"
-            onChange={(e) => setVolume({ master: Number(e.target.value) })}
-          />
-
-          <div className="volume-row" style={{ marginTop: 12 }}>
-            <span className="label">Beeps &amp; buzzers</span>
-            <span className="volume-value tabular">{pct(vol.effects)}</span>
-          </div>
-          <input
-            type="range" min={0} max={1} step={0.01}
-            value={vol.effects}
-            aria-label="Effects volume"
-            onChange={(e) => setVolume({ effects: Number(e.target.value) })}
-          />
-          <p className="dim volume-hint">
-            Turn these down to keep the ticks out of the way of the music.
-          </p>
-
-          <button className="btn btn-sm volume-mute" onClick={toggleMute}>
-            {vol.muted ? '🔊 Unmute' : '🔇 Mute everything'}
-          </button>
-          <p className="dim volume-hint">
-            <b>M</b> mutes · <b>[</b> and <b>]</b> step the level
-          </p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
